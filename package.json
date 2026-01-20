@@ -1,0 +1,76 @@
+{
+  "name": "@okrapdf/cli",
+  "version": "0.2.11",
+  "description": "OkraPDF command-line interface for PDF extraction and document chat",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "okra": "./dist/index.js"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src/**/*.ts",
+    "prepublishOnly": "npm run build",
+    "release": "npm version patch && npm publish --access public"
+  },
+  "keywords": [
+    "okrapdf",
+    "pdf",
+    "ocr",
+    "extraction",
+    "cli",
+    "document",
+    "table-extraction",
+    "ai",
+    "document-processing"
+  ],
+  "author": "OkraPDF",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/okrapdf/cli.git"
+  },
+  "homepage": "https://okrapdf.com",
+  "bugs": {
+    "url": "https://github.com/okrapdf/cli/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "cli-table3": "^0.6.5",
+    "commander": "^12.1.0",
+    "conf": "^13.0.1",
+    "dotenv": "^17.2.3",
+    "enquirer": "^2.4.1",
+    "form-data": "^4.0.0",
+    "got": "^14.4.2",
+    "ora": "^8.0.1",
+    "ws": "^8.18.0"
+  },
+  "optionalDependencies": {
+    "mupdf": "^0.3.0",
+    "sharp": "^0.33.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/ws": "^8.5.12",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ]
+}
