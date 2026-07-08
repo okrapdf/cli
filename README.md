@@ -30,8 +30,12 @@ parser is a swappable seam — layout-VLM is just the default.
 ## Install
 
 ```bash
-npm i -g @okrapdf/cli
+# From the GitHub release (recommended until the npm handover — see Status above)
+npm i -g https://github.com/okrapdf/cli/releases/latest/download/okrapdf-cli.tgz
 ```
+
+> `npm i -g @okrapdf/cli` currently installs **0.16.x, the legacy okra-cloud CLI** — not
+> this. Use the release tarball above until the npm handover lands.
 
 Node ≥ 22. `mupdf` (page rasterization) and `sharp` (image encoding) are bundled.
 
