@@ -27,3 +27,41 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm test
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    name: shellcheck (install.sh)
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint install.sh
+        run: |
+          # ubuntu-latest ships shellcheck; install it only if that ever changes.
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            sudo apt-get update && sudo apt-get install -y shellcheck
+          fi
+          shellcheck --version
+          shellcheck install.sh
+
+  install-smoke:
+    runs-on: ubuntu-latest
+    name: install-smoke (release tarball)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run the installer against the real latest release
+        # CI has network: install.sh downloads the published 'latest' release
+        # tarball via npm, exactly as an end user would.
+        run: bash install.sh
+      - name: Assert the installed CLI runs
+        run: |
+          # Deliberately NOT pinning an exact version: this job tracks whatever
+          # 'latest' currently is (0.17.0+), so a routine release bump doesn't
+          # turn CI red. The contract we assert is "the installed binary runs":
+          # a non-empty --version and a clean --help exit.
+          hash -r || true
+          version="$(okra --version)"
+          echo "okra --version -> ${version}"
+          test -n "${version}"
+          okra --help >/dev/null
