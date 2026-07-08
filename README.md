@@ -78,8 +78,8 @@ catalog entry + auth resolution + transport dialect. Key resolution precedence i
 
 | Provider | Env var(s) | Default model | Key |
 |---|---|---|---|
-| `gemini` | `GEMINI_API_KEY` / `GOOGLE_API_KEY` | `gemini-3-flash` | Free key at https://aistudio.google.com/apikey |
-| `nvidia` | `NVIDIA_API_KEY` | `qwen/qwen3-vl-235b-a22b-instruct` | Free dev tier at https://build.nvidia.com |
+| `gemini` | `GEMINI_API_KEY` / `GOOGLE_API_KEY` | `gemini-3-flash-preview` | Free key at https://aistudio.google.com/apikey |
+| `nvidia` | `NVIDIA_API_KEY` | `nvidia/llama-3.1-nemotron-nano-vl-8b-v1` | Free dev tier at https://build.nvidia.com |
 | `openrouter` | `OPENROUTER_API_KEY` | `google/gemini-3-flash-preview` | https://openrouter.ai/keys |
 | `openai-compatible` | `OPENAI_API_KEY` + `OPENAI_BASE_URL` | *(pass `--model`)* | Any vLLM / Ollama / OpenAI-shaped endpoint |
 
@@ -142,7 +142,7 @@ okra parse doc.pdf --parser layout-vlm   # the default
   "meta": {
     "parserId": "layout-vlm",
     "providerId": "gemini",
-    "model": "gemini-3-flash",
+    "model": "gemini-3-flash-preview",
     "pageCount": 12,
     "durationMs": 8423,
     "costUsd": 0.0031,              // omitted entirely when the model is unpriced (never guessed)

@@ -12,11 +12,14 @@ export const PROVIDERS: ProviderSpec[] = [
     api: 'gemini',
     envKeys: ['GEMINI_API_KEY', 'GOOGLE_API_KEY'],
     baseUrl: 'https://generativelanguage.googleapis.com',
-    defaultModel: 'gemini-3-flash',
+    // Ids verified against the live v1beta ListModels response 2026-07-08 —
+    // GA models have bare ids; the 3-series flash/pro are still `-preview`.
+    defaultModel: 'gemini-3-flash-preview',
     models: [
-      { id: 'gemini-3-flash', vision: true },
-      { id: 'gemini-3.1-pro', vision: true },
+      { id: 'gemini-3-flash-preview', vision: true },
+      { id: 'gemini-3.5-flash', vision: true },
       { id: 'gemini-3.1-flash-lite', vision: true },
+      { id: 'gemini-3.1-pro-preview', vision: true },
       { id: 'gemini-2.5-flash', vision: true },
     ],
     keyHint: 'Free key at https://aistudio.google.com/apikey',
@@ -27,10 +30,14 @@ export const PROVIDERS: ProviderSpec[] = [
     api: 'openai-chat',
     envKeys: ['NVIDIA_API_KEY'],
     baseUrl: 'https://integrate.api.nvidia.com/v1',
-    // Curated list intentionally short — verify live availability before extending
-    // (`okra models --provider nvidia` hits /v1/models with the user's key).
-    defaultModel: 'qwen/qwen3-vl-235b-a22b-instruct',
-    models: [{ id: 'qwen/qwen3-vl-235b-a22b-instruct', vision: true }],
+    // Ids verified against the live /v1/models response 2026-07-08. Curated list
+    // intentionally short — verify live availability before extending.
+    defaultModel: 'nvidia/llama-3.1-nemotron-nano-vl-8b-v1',
+    models: [
+      { id: 'nvidia/llama-3.1-nemotron-nano-vl-8b-v1', vision: true },
+      { id: 'meta/llama-3.2-90b-vision-instruct', vision: true },
+      { id: 'microsoft/phi-3-vision-128k-instruct', vision: true },
+    ],
     keyHint: 'Key at https://build.nvidia.com (free dev tier)',
   },
   {

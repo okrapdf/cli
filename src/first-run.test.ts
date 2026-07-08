@@ -26,7 +26,7 @@ const agent = () => getGlobalDispatcher() as MockAgent;
 function interceptGemini(): void {
   agent()
     .get(GEMINI_ORIGIN)
-    .intercept({ path: '/v1beta/models/gemini-3-flash:generateContent', method: 'POST' })
+    .intercept({ path: '/v1beta/models/gemini-3-flash-preview:generateContent', method: 'POST' })
     .reply(200, {
       candidates: [{ content: { parts: [{ text: CANNED }] } }],
       usageMetadata: { promptTokenCount: 50, candidatesTokenCount: 20 },
@@ -53,7 +53,7 @@ describe('zero-account first run — okra parse (BYOK, only GEMINI_API_KEY)', ()
 
     const { envelope } = await runParse(
       FIXTURE,
-      { provider: 'gemini', model: 'gemini-3-flash', dpi: '72', out: outDir },
+      { provider: 'gemini', model: 'gemini-3-flash-preview', dpi: '72', out: outDir },
       deps,
     );
 
