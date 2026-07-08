@@ -33,7 +33,7 @@ parser is a swappable seam — layout-VLM is just the default.
 npm i -g @okrapdf/cli
 ```
 
-Node ≥ 22 (pnpm 11 toolchain requires 22.13+; Node 20 is EOL since 2026-04). `mupdf` (page rasterization) and `sharp` (image encoding) are bundled.
+Node ≥ 22. `mupdf` (page rasterization) and `sharp` (image encoding) are bundled.
 
 ## 30-second quickstart (BYOK)
 
