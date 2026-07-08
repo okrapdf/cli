@@ -67,7 +67,61 @@ export function getProvider(id: string): ProviderSpec | undefined {
  * Resolve key + base URL with precedence flag > env > config (DESIGN.md, issue #2).
  * Throws a user-facing Error when the key (or a required base URL) is missing —
  * the message MUST name the first env var and the `okra auth login <id>` fix.
+ * Pure: never a network lookup.
  */
-export function resolveProvider(_spec: ProviderSpec, _inputs: ResolveInputs): ResolvedProvider {
-  throw new Error('TODO(worker): implement per DESIGN.md — tests first');
+export function resolveProvider(spec: ProviderSpec, inputs: ResolveInputs): ResolvedProvider {
+  const { flagKey, flagBaseUrl, env, config } = inputs;
+
+  // --- API key: flag > env (envKeys in order) > config ---
+  let apiKey: string | undefined;
+  let keySource: ResolvedProvider['keySource'] | undefined;
+
+  if (flagKey) {
+    apiKey = flagKey;
+    keySource = 'flag';
+  } else {
+    for (const envKey of spec.envKeys) {
+      const v = env[envKey];
+      if (v) {
+        apiKey = v;
+        keySource = 'env';
+        break;
+      }
+    }
+    if (!apiKey && config.apiKey) {
+      apiKey = config.apiKey;
+      keySource = 'config';
+    }
+  }
+
+  if (!apiKey || !keySource) {
+    const firstEnv = spec.envKeys[0];
+    throw new Error(
+      `No API key found for ${spec.id} (${spec.displayName}). ` +
+        `Set ${firstEnv} in your environment, or run \`okra auth login ${spec.id}\`.`,
+    );
+  }
+
+  // --- base URL: flag > baseUrlEnvKey env > config > spec default ---
+  let baseUrl: string | undefined;
+  if (flagBaseUrl) {
+    baseUrl = flagBaseUrl;
+  } else if (spec.baseUrlEnvKey && env[spec.baseUrlEnvKey]) {
+    baseUrl = env[spec.baseUrlEnvKey];
+  } else if (config.baseUrl) {
+    baseUrl = config.baseUrl;
+  } else {
+    baseUrl = spec.baseUrl;
+  }
+
+  if (!baseUrl) {
+    // Only reachable for openai-compatible (spec.baseUrl === undefined).
+    const envHint = spec.baseUrlEnvKey ? `, set ${spec.baseUrlEnvKey},` : ',';
+    throw new Error(
+      `No base URL for ${spec.id} (${spec.displayName}). ` +
+        `Pass --base-url <url>${envHint} or run \`okra auth login ${spec.id}\`.`,
+    );
+  }
+
+  return { spec, apiKey, baseUrl, keySource };
 }
