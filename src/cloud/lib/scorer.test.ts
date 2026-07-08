@@ -622,7 +622,12 @@ describe('Workflow Integration', () => {
     const tables: TableData[] = [];
 
     for (let i = 1; i <= 50; i++) {
-      const confidence = 0.5 + Math.random() * 0.5; // 0.5 - 1.0
+      // Deterministic pseudo-random spread over [0.5, 0.99] — NOT Math.random(): the
+      // unseeded version failed ~3% of runs (when no candidate page cleared the 0.95
+      // auto-approve threshold), which surfaced as an intermittent full-suite "flake".
+      // 37 is coprime with 50, so this cycles the whole [0,50) range; page 4 → 0.98
+      // guarantees at least one auto-approvable page.
+      const confidence = 0.5 + ((i * 37) % 50) / 100; // 0.5 - 0.99, deterministic
       const hasTables = i % 5 === 0; // Every 5th page has tables
       const hasGaps = i % 10 === 0; // Every 10th page has gaps
 
