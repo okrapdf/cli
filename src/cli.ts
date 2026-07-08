@@ -13,7 +13,6 @@ import chalk from 'chalk';
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-import { createAuthCommand } from './commands/auth.js';
 import { createDocsCommand } from './commands/docs.js';
 import { createJobsCommand } from './commands/jobs.js';
 import { createTablesCommand } from './commands/tables.js';
@@ -23,7 +22,7 @@ import { createExtractCommand, createRunCommand } from './commands/shortcuts.js'
 import { createProcessorsCommand } from './commands/processors.js';
 import { createTemplatesCommand } from './commands/templates.js';
 import { createLogsCommand } from './commands/logs.js';
-import { createProvidersCommand, createVlmCommand } from './commands/providers.js';
+import { createProvidersCommand, createAuthCommand } from './commands/providers.js';
 import { createReviewCommand } from './commands/review.js';
 import { OkraApiError, EXIT_CODES } from './lib/client.js';
 import { error } from './lib/output.js';
@@ -73,7 +72,6 @@ export function createProgram(): Command {
   program.addCommand(createTemplatesCommand());
   program.addCommand(createLogsCommand());
   program.addCommand(createProvidersCommand());
-  program.addCommand(createVlmCommand());
 
   // Handle global --json flag
   program.hook('preAction', (thisCommand) => {

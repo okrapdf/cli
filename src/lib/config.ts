@@ -14,7 +14,13 @@ import { config as dotenvConfig } from 'dotenv';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
-import type { CliConfig, OutputFormat, OcrEngine, VlmModel } from '../types.js';
+import type {
+  CliConfig,
+  OutputFormat,
+  OcrEngine,
+  VlmModel,
+  ProviderConfigEntry,
+} from '../types.js';
 
 const DEFAULT_BASE_URL = 'https://okrapdf.com';
 const DEFAULT_FORMAT: OutputFormat = 'table';
@@ -30,13 +36,17 @@ const envFiles = [
 
 for (const envFile of envFiles) {
   if (existsSync(envFile)) {
-    dotenvConfig({ path: envFile });
+    // quiet: true — dotenv v17 otherwise prints promotional "tips" to STDOUT at load,
+    // which corrupts every `-o json` command's machine-readable output.
+    dotenvConfig({ path: envFile, quiet: true });
   }
 }
 
-// Create config store
+// Create config store. OKRA_CONFIG_DIR overrides the storage directory (Conf `cwd`) —
+// used by tests to isolate from the real user config; harmless in production if unset.
 const config = new Conf<CliConfig>({
   projectName: 'okrapdf',
+  ...(process.env.OKRA_CONFIG_DIR ? { cwd: process.env.OKRA_CONFIG_DIR } : {}),
   defaults: {
     base_url: DEFAULT_BASE_URL,
     default_format: DEFAULT_FORMAT,
@@ -111,7 +121,35 @@ export function setDefaultVlm(vlm: VlmModel): void {
   config.set('default_vlm', vlm);
 }
 
+/**
+ * Get a BYOK provider's stored config (api key + base URL), keyed by provider id.
+ * Stored under `providers.<id>` with snake_case keys; returns {} when absent.
+ */
+export function getProviderConfig(id: string): { apiKey?: string; baseUrl?: string } {
+  const providers = config.get('providers') as Record<string, ProviderConfigEntry> | undefined;
+  const entry = providers?.[id];
+  if (!entry) return {};
+  const out: { apiKey?: string; baseUrl?: string } = {};
+  if (entry.api_key !== undefined) out.apiKey = entry.api_key;
+  if (entry.base_url !== undefined) out.baseUrl = entry.base_url;
+  return out;
+}
 
+/**
+ * Merge a BYOK provider's api key / base URL into `providers.<id>`.
+ * Only the fields provided are updated (partial merge); others persist.
+ */
+export function setProviderConfig(
+  id: string,
+  { apiKey, baseUrl }: { apiKey?: string; baseUrl?: string },
+): void {
+  const providers = { ...(config.get('providers') as Record<string, ProviderConfigEntry> | undefined) };
+  const entry: ProviderConfigEntry = { ...(providers[id] ?? {}) };
+  if (apiKey !== undefined) entry.api_key = apiKey;
+  if (baseUrl !== undefined) entry.base_url = baseUrl;
+  providers[id] = entry;
+  config.set('providers', providers);
+}
 
 /**
  * Get all config values
