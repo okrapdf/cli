@@ -29,6 +29,16 @@ parser is a swappable seam — layout-VLM is just the default.
 
 ## Install
 
+**One-liner (macOS/Linux)** — installs the release tarball via npm (no account, no sudo):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/okrapdf/cli/main/install.sh | bash
+```
+
+Pin a specific release by setting `OKRA_INSTALL_VERSION` (e.g. `OKRA_INSTALL_VERSION=v0.17.0`).
+
+**npm (release tarball)** — the same install, by hand:
+
 ```bash
 # From the GitHub release (recommended until the npm handover — see Status above)
 npm i -g https://github.com/okrapdf/cli/releases/latest/download/okrapdf-cli.tgz
