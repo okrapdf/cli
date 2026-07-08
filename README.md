@@ -33,7 +33,7 @@ parser is a swappable seam — layout-VLM is just the default.
 npm i -g @okrapdf/cli
 ```
 
-Node ≥ 20. `mupdf` (page rasterization) and `sharp` (image encoding) are bundled.
+Node ≥ 22 (pnpm 11 toolchain requires 22.13+; Node 20 is EOL since 2026-04). `mupdf` (page rasterization) and `sharp` (image encoding) are bundled.
 
 ## 30-second quickstart (BYOK)
 
@@ -180,7 +180,7 @@ pnpm test       # vitest (net-killed: no live network in tests)
 TDD is the workflow — write the failing test first. The architecture (the two seams:
 Providers and Parsers) and its dependency rules are in [`DESIGN.md`](DESIGN.md), and are
 enforced by [`src/arch.test.ts`](src/arch.test.ts). CI runs `pnpm build && pnpm test` on
-Node 20 + 22 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
+Node 22 + 24 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
 
 ## License
 

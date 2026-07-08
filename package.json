@@ -47,7 +47,7 @@
     "url": "https://github.com/okrapdf/cli/issues"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "dependencies": {
     "chalk": "^5.3.0",
