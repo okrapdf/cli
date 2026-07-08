@@ -6,12 +6,17 @@
  * providers or transports (those are wired by the command layer and passed in).
  */
 
-import type { DocumentParse } from './blocks.js';
+import type { DocumentParse, TokenUsage, PageParse, ParseRunMeta, LayoutBlock } from './blocks.js';
+import { addUsage, EMPTY_USAGE } from './blocks.js';
 import type { VlmClient } from './vlm.js';
-// NOTE(worker): Parser/PageInput types live in ../parsers/types.js. Importing a TYPE from
-// parsers/ into core is a one-way type-only exception to keep this signature honest;
-// runtime imports remain forbidden (dependency rules). Use `import type`.
-import type { Parser } from '../parsers/types.js';
+import { VlmHttpError } from './vlm.js';
+// NOTE(worker): Parser/PageInput/ParserContext types live in ../parsers/types.js. Importing a
+// TYPE from parsers/ into core is a one-way type-only exception to keep this signature honest;
+// runtime imports of parsers/ remain forbidden (dependency rules). Use `import type`.
+import type { Parser, ParserContext, PageInput } from '../parsers/types.js';
+// rasterize is core-internal (it wraps lib/pdf-image.ts, the sanctioned rasterization path);
+// core→core runtime imports are allowed.
+import { rasterizePages } from './rasterize.js';
 
 export interface ParseDocumentOptions {
   parser: Parser;
@@ -31,6 +36,15 @@ export interface ParseDocumentOptions {
   retries?: number;
   /** Rasterization DPI. Default 175. */
   dpi?: number;
+  /**
+   * Cost hook. The engine must NOT import providers/pricing at runtime (dependency
+   * rule 3: core imports nothing outside core). The command layer passes
+   * `providers/pricing.costUsdOrUndefined`; returns `undefined` for an unpriced model
+   * (never guessed, never 0-for-unknown → meta.costUsd omitted).
+   *
+   * Added per worker CONTRACT-NOTE (architect pre-approved exactly this field) — DESIGN.md #4.
+   */
+  pricing?: (model: string, usage: TokenUsage) => number | undefined;
   signal?: AbortSignal;
   onProgress?: (done: number, total: number) => void;
 }
@@ -46,9 +60,115 @@ export interface ParseDocumentOptions {
  * - usage = sum of page usages; meta.costUsd via providers/pricing when model is priced,
  *   else undefined; meta.warnings collects per-page anomalies (0 blocks decoded, etc.)
  */
-export function parseDocument(
-  _pdf: Uint8Array,
-  _opts: ParseDocumentOptions,
+const DEFAULT_CONCURRENCY = 4;
+const DEFAULT_RETRIES = 2;
+const BACKOFF_BASE_MS = 250;
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Retry only transient VLM failures: 429 (rate limit) and 5xx (upstream). */
+function isRetryable(err: unknown): boolean {
+  return err instanceof VlmHttpError && (err.status === 429 || err.status >= 500);
+}
+
+async function parsePageWithRetry(
+  parser: Parser,
+  input: PageInput,
+  ctx: ParserContext,
+  retries: number,
+): Promise<PageParse> {
+  let attempt = 0;
+  for (;;) {
+    try {
+      return await parser.parsePage(input, ctx);
+    } catch (err) {
+      if (!isRetryable(err) || attempt >= retries) throw err;
+      // exponential backoff with full jitter: rand(0, base·2^attempt).
+      const ceiling = BACKOFF_BASE_MS * 2 ** attempt;
+      await sleep(ceiling + Math.random() * ceiling);
+      attempt++;
+    }
+  }
+}
+
+export async function parseDocument(
+  pdf: Uint8Array,
+  opts: ParseDocumentOptions,
 ): Promise<DocumentParse> {
-  throw new Error('TODO(worker): implement per contract above — tests first');
+  const startedAt = Date.now();
+  const concurrency = Math.max(1, opts.concurrency ?? DEFAULT_CONCURRENCY);
+  const retries = opts.retries ?? DEFAULT_RETRIES;
+  const settings = { ...opts.parser.spec.defaults, ...(opts.settings ?? {}) };
+
+  const inputs = await rasterizePages(pdf, { pages: opts.pages, dpi: opts.dpi });
+  const total = inputs.length;
+
+  const ctx: ParserContext = {
+    vlm: opts.vlm,
+    model: opts.model,
+    providerId: opts.providerId,
+    httpBaseUrl: opts.httpBaseUrl,
+    settings,
+    signal: opts.signal,
+  };
+
+  // Bounded worker pool: at most `concurrency` runners, each pulling the next page
+  // index until exhausted. Results land by index → ascending order regardless of
+  // completion order. First failure stops new work and rejects the whole run.
+  const results: PageParse[] = new Array(total);
+  let done = 0;
+  let cursor = 0;
+  let firstError: unknown;
+
+  const runner = async (): Promise<void> => {
+    while (firstError === undefined) {
+      const idx = cursor++;
+      if (idx >= total) return;
+      const input = inputs[idx];
+      try {
+        results[idx] = await parsePageWithRetry(opts.parser, input, ctx, retries);
+        done++;
+        opts.onProgress?.(done, total);
+      } catch (err) {
+        if (firstError === undefined) {
+          const detail = err instanceof Error ? err.message : String(err);
+          firstError = new Error(
+            `Failed to parse page ${input.page} after ${retries} ${retries === 1 ? 'retry' : 'retries'}: ${detail}`,
+          );
+        }
+        return;
+      }
+    }
+  };
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, total) }, () => runner()));
+  if (firstError !== undefined) throw firstError;
+
+  const pages = results;
+  const blocks: LayoutBlock[] = pages.flatMap((p) => p.blocks);
+  let usage = EMPTY_USAGE;
+  for (const p of pages) usage = addUsage(usage, p.usage);
+  const markdown = pages.map((p) => p.markdown).join('\n\n');
+
+  const warnings: string[] = [];
+  for (const p of pages) {
+    if (p.blocks.length === 0) warnings.push(`page ${p.page}: 0 blocks decoded`);
+  }
+
+  // Cost via the injected hook only — the engine never imports providers/pricing.
+  // undefined for an unpriced model (never guessed, never 0-for-unknown).
+  const costUsd =
+    opts.pricing && opts.model !== undefined ? opts.pricing(opts.model, usage) : undefined;
+
+  const meta: ParseRunMeta = {
+    parserId: opts.parser.spec.id,
+    providerId: opts.providerId,
+    model: opts.model,
+    pageCount: total,
+    durationMs: Date.now() - startedAt,
+    costUsd,
+    warnings,
+  };
+
+  return { markdown, pages, blocks, usage, meta };
 }
