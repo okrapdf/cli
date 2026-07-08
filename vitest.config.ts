@@ -5,6 +5,9 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['src/**/*.test.ts'],
+    // AGENTS.md rule 4 / DESIGN.md "No-cloud guard": undici MockAgent +
+    // disableNetConnect() installed as the global dispatcher before every test file.
+    setupFiles: ['./test/net-guard.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
