@@ -7,11 +7,11 @@ keys only.**
 [![CI](https://github.com/okrapdf/cli/actions/workflows/ci.yml/badge.svg)](https://github.com/okrapdf/cli/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> **Status — v0.17 re-baseline in progress (branch `m1-byok`).**
-> This branch is the BYOK rewrite: `okra parse` with your own model key, no okra
-> account. The version on npm (**0.16.x**) is still the *legacy* okra-cloud CLI — do
-> not confuse the two. **Do not publish from this branch yet**; it is pre-release
-> (`0.17.0-dev.0`) and the surface is still settling.
+> **Status — v0.17.x, the BYOK re-baseline. Pre-1.0: the surface may still change.**
+> The version on npm (**0.16.x**) is still the *legacy* okra-cloud CLI published from
+> the okraPDF monorepo — do not confuse the two. Until the npm handover lands
+> (tracked in [steventsao/okra#615](https://github.com/steventsao/okra/issues/615)),
+> install from a [GitHub release](https://github.com/okrapdf/cli/releases) or source.
 
 ## What it is
 

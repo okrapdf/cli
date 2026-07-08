@@ -1,6 +1,6 @@
 {
   "name": "@okrapdf/cli",
-  "version": "0.17.0-dev.0",
+  "version": "0.17.0",
   "description": "BYOK PDF parsing CLI — bring your own Gemini/NVIDIA/OpenAI-compatible key. Layout-aware markdown + bbox blocks. okraPDF cloud optional.",
   "type": "module",
   "main": "dist/index.js",
