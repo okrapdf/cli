@@ -4,8 +4,8 @@
  * Owns the on-disk config store (`conf`), dotenv loading, the default output
  * format, and the BYOK per-provider credential store (providers.<id>). The
  * okra-cloud credentials (OKRA_API_KEY / base URL) live in cloud/lib/okra-config.ts
- * — this module has no knowledge of okrapdf.com and the core `okra parse` path
- * never touches the cloud.
+ * — this module has no knowledge of the okra cloud host and the core `okra parse`
+ * path never touches the cloud.
  *
  * Config priority (highest to lowest):
  * 1. Environment variables
