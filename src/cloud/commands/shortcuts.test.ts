@@ -6,9 +6,8 @@ vi.mock('../lib/client.js', () => ({
   get: vi.fn(),
 }));
 
-vi.mock('../lib/config.js', () => ({
-  getApiKey: () => 'test-api-key',
-  getBaseUrl: () => 'https://okrapdf.com',
+vi.mock('../../lib/config.js', () => ({
+  getDefaultFormat: () => 'table',
   getDefaultOcr: () => null,
   getDefaultVlm: () => null,
 }));

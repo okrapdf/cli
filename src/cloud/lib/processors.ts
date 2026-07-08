@@ -93,7 +93,7 @@ export const BUILTIN_PROCESSORS: Record<string, {
   },
   'default': {
     id: 'default',
-    name: 'OkraPDF Default',
+    name: 'okraPDF Default',
     description: 'Automatic processor selection based on document type',
     apiEndpoint: 'api/v1/extract',
   },

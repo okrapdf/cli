@@ -8,9 +8,9 @@
 import { mkdirSync, writeFileSync, copyFileSync, readFileSync } from 'fs';
 import { join, resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import type { JobResults, TableResult } from '../types.js';
-import type { NormalizedBbox } from './pdf-image.js';
-import type { PdfImageRenderer } from './pdf-image.js';
+import type { JobResults, TableResult } from '../../types.js';
+import type { NormalizedBbox } from '../../lib/pdf-image.js';
+import type { PdfImageRenderer } from '../../lib/pdf-image.js';
 
 /**
  * Workspace manifest for agents
@@ -228,7 +228,7 @@ async function renderWorkspaceImages(
   entities: Array<{ id?: string; type?: string; page?: number; title?: string | null; bbox?: NormalizedBbox }>,
   options: { scale: number; format: 'png' | 'jpg' }
 ): Promise<{ pages: string[]; entities: string[] }> {
-  const { PdfImageRenderer } = await import('./pdf-image.js');
+  const { PdfImageRenderer } = await import('../../lib/pdf-image.js');
   const renderer = await PdfImageRenderer.fromBuffer(pdfBuffer);
 
   const pageImages: string[] = [];

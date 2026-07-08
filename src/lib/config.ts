@@ -1,9 +1,15 @@
 /**
- * Configuration management for OkraPDF CLI
- * 
+ * Configuration management for okraPDF CLI (shared, cloud-agnostic).
+ *
+ * Owns the on-disk config store (`conf`), dotenv loading, the default output
+ * format, and the BYOK per-provider credential store (providers.<id>). The
+ * okra-cloud credentials (OKRA_API_KEY / base URL) live in cloud/lib/okra-config.ts
+ * — this module has no knowledge of okrapdf.com and the core `okra parse` path
+ * never touches the cloud.
+ *
  * Config priority (highest to lowest):
- * 1. Environment variables (OKRA_API_KEY, OKRA_BASE_URL)
- * 2. .env file in current directory
+ * 1. Environment variables
+ * 2. .env / .env.local in current directory
  * 3. .okra file in current directory
  * 4. ~/.okra file in home directory
  * 5. Config store (~/.config/okrapdf/config.json)
@@ -22,7 +28,6 @@ import type {
   ProviderConfigEntry,
 } from '../types.js';
 
-const DEFAULT_BASE_URL = 'https://okrapdf.com';
 const DEFAULT_FORMAT: OutputFormat = 'table';
 
 // Load .env files in priority order (first found wins via dotenv behavior)
@@ -48,45 +53,16 @@ const config = new Conf<CliConfig>({
   projectName: 'okrapdf',
   ...(process.env.OKRA_CONFIG_DIR ? { cwd: process.env.OKRA_CONFIG_DIR } : {}),
   defaults: {
-    base_url: DEFAULT_BASE_URL,
     default_format: DEFAULT_FORMAT,
-  },
+  } as CliConfig,
 });
 
 /**
- * Get the API key from environment or config
+ * The shared on-disk config store. Exported so the opt-in cloud layer
+ * (cloud/lib/okra-config.ts) can persist okra-cloud credentials on the SAME
+ * store without this module importing anything cloud-specific.
  */
-export function getApiKey(): string | undefined {
-  return process.env.OKRA_API_KEY || config.get('api_key');
-}
-
-/**
- * Set the API key in config
- */
-export function setApiKey(key: string): void {
-  config.set('api_key', key);
-}
-
-/**
- * Remove the API key from config
- */
-export function clearApiKey(): void {
-  config.delete('api_key');
-}
-
-/**
- * Get the base URL from environment or config
- */
-export function getBaseUrl(): string {
-  return process.env.OKRA_BASE_URL || config.get('base_url') || DEFAULT_BASE_URL;
-}
-
-/**
- * Set the base URL in config
- */
-export function setBaseUrl(url: string): void {
-  config.set('base_url', url);
-}
+export const configStore = config;
 
 /**
  * Get the default output format
@@ -152,19 +128,6 @@ export function setProviderConfig(
 }
 
 /**
- * Get all config values
- */
-export function getConfig(): CliConfig {
-  return {
-    api_key: getApiKey(),
-    base_url: getBaseUrl(),
-    default_format: getDefaultFormat(),
-    default_ocr: getDefaultOcr(),
-    default_vlm: getDefaultVlm(),
-  };
-}
-
-/**
  * Get the config file path
  */
 export function getConfigPath(): string {
@@ -176,13 +139,6 @@ export function getConfigPath(): string {
  */
 export function resetConfig(): void {
   config.clear();
-}
-
-/**
- * Check if authenticated
- */
-export function isAuthenticated(): boolean {
-  return !!getApiKey();
 }
 
 /**

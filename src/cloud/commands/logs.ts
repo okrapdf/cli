@@ -15,9 +15,9 @@ import {
   formatJobLog,
   getLogsDir,
 } from '../lib/logs.js';
-import { formatOutput, success, info } from '../lib/output.js';
-import { getDefaultFormat, isJsonOutput } from '../lib/config.js';
-import type { OutputFormat } from '../types.js';
+import { formatOutput, success, info } from '../../lib/output.js';
+import { getDefaultFormat, isJsonOutput } from '../../lib/config.js';
+import type { OutputFormat } from '../../types.js';
 
 export function createLogsCommand(): Command {
   const logs = new Command('logs')

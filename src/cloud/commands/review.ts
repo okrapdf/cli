@@ -1,11 +1,11 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { get, post, patch, OkraApiError, EXIT_CODES } from '../lib/client.js';
-import { formatOutput, formatDate, success, error, info } from '../lib/output.js';
-import { withSpinner } from '../lib/progress.js';
-import { getDefaultFormat, isJsonOutput } from '../lib/config.js';
+import { formatOutput, formatDate, success, error, info } from '../../lib/output.js';
+import { withSpinner } from '../../lib/progress.js';
+import { getDefaultFormat, isJsonOutput } from '../../lib/config.js';
 import { openInBrowser, getJobWebUrl } from '../lib/browser.js';
-import type { OutputFormat } from '../types.js';
+import type { OutputFormat } from '../../types.js';
 import { readFileSync, existsSync } from 'fs';
 
 interface VerificationTree {

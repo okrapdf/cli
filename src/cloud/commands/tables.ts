@@ -10,10 +10,10 @@ import {
   formatOutput,
   success,
   error,
-} from '../lib/output.js';
-import { withSpinner } from '../lib/progress.js';
-import { getDefaultFormat, isJsonOutput } from '../lib/config.js';
-import type { Table, PaginatedResponse, OutputFormat } from '../types.js';
+} from '../../lib/output.js';
+import { withSpinner } from '../../lib/progress.js';
+import { getDefaultFormat, isJsonOutput } from '../../lib/config.js';
+import type { Table, PaginatedResponse, OutputFormat } from '../../types.js';
 
 // Columns for table list display
 const TABLE_COLUMNS = [

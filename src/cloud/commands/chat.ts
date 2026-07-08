@@ -6,10 +6,10 @@ import { Command } from 'commander';
 import { createInterface } from 'readline';
 import chalk from 'chalk';
 import { get, post, OkraApiError, EXIT_CODES } from '../lib/client.js';
-import { success, error, info, formatOutput } from '../lib/output.js';
-import { createSpinner, withSpinner } from '../lib/progress.js';
-import { getDefaultFormat } from '../lib/config.js';
-import type { ChatMessage, ChatResponse, Document, OutputFormat } from '../types.js';
+import { success, error, info, formatOutput } from '../../lib/output.js';
+import { createSpinner, withSpinner } from '../../lib/progress.js';
+import { getDefaultFormat } from '../../lib/config.js';
+import type { ChatMessage, ChatResponse, Document, OutputFormat } from '../../types.js';
 
 export function createChatCommand(): Command {
   const chat = new Command('chat')
@@ -86,7 +86,7 @@ async function interactiveChat(documentUuid: string, systemPrompt?: string): Pro
   const history: ChatMessage[] = [];
 
   console.log();
-  console.log(chalk.bold('OkraPDF Document Chat'));
+  console.log(chalk.bold('okraPDF Document Chat'));
   console.log(chalk.dim('Type your questions about the document. Use /quit to exit.'));
   console.log(chalk.dim('Commands: /quit, /clear, /history, /export'));
   console.log();

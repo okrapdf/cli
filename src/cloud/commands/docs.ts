@@ -13,11 +13,11 @@ import {
   formatDate,
   success,
   error,
-} from '../lib/output.js';
-import { withSpinner } from '../lib/progress.js';
-import { getDefaultFormat, isJsonOutput } from '../lib/config.js';
+} from '../../lib/output.js';
+import { withSpinner } from '../../lib/progress.js';
+import { getDefaultFormat, isJsonOutput } from '../../lib/config.js';
 
-import type { Document, PaginatedResponse, SignedUrlResponse, OutputFormat } from '../types.js';
+import type { Document, PaginatedResponse, SignedUrlResponse, OutputFormat } from '../../types.js';
 
 // Columns for document table display
 const DOC_COLUMNS = [

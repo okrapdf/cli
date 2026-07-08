@@ -13,9 +13,9 @@ import {
   formatProcessorList,
   PROCESSOR_ALIASES,
 } from '../lib/processors.js';
-import { formatOutput } from '../lib/output.js';
-import { getDefaultFormat, isJsonOutput } from '../lib/config.js';
-import type { OutputFormat } from '../types.js';
+import { formatOutput } from '../../lib/output.js';
+import { getDefaultFormat, isJsonOutput } from '../../lib/config.js';
+import type { OutputFormat } from '../../types.js';
 
 export function createProcessorsCommand(): Command {
   const processors = new Command('processors')

@@ -10,9 +10,9 @@ import { existsSync, statSync, mkdirSync, writeFileSync, readFileSync } from 'fs
 import { resolve, basename, join } from 'path';
 import chalk from 'chalk';
 import { get, post, uploadFile, OkraApiError, EXIT_CODES, isAuthenticated, createAnonymousClient } from '../lib/client.js';
-import { formatOutput, success, error, info } from '../lib/output.js';
-import { withSpinner, pollWithProgress } from '../lib/progress.js';
-import { getDefaultFormat, getDefaultOcr, getDefaultVlm } from '../lib/config.js';
+import { formatOutput, success, error, info } from '../../lib/output.js';
+import { withSpinner, pollWithProgress } from '../../lib/progress.js';
+import { getDefaultFormat, getDefaultOcr, getDefaultVlm } from '../../lib/config.js';
 import { resolveProcessor, getProcessor } from '../lib/processors.js';
 import { loadTemplate } from '../lib/templates.js';
 import { logJob, updateJobLog } from '../lib/logs.js';
@@ -59,7 +59,7 @@ import type {
   SignedUrlResponse,
   ChatResponse,
   OutputFormat,
-} from '../types.js';
+} from '../../types.js';
 
 type WaitStage = 'ocr' | 'entities' | 'index';
 

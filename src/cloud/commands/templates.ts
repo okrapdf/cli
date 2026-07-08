@@ -16,9 +16,9 @@ import {
   BUILTIN_TEMPLATES,
   Template,
 } from '../lib/templates.js';
-import { formatOutput, success, error, info } from '../lib/output.js';
-import { getDefaultFormat, isJsonOutput } from '../lib/config.js';
-import type { OutputFormat } from '../types.js';
+import { formatOutput, success, error, info } from '../../lib/output.js';
+import { getDefaultFormat, isJsonOutput } from '../../lib/config.js';
+import type { OutputFormat } from '../../types.js';
 
 export function createTemplatesCommand(): Command {
   const templates = new Command('templates')

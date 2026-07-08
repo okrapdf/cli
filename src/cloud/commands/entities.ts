@@ -16,10 +16,10 @@ import {
   error,
   info,
   warn,
-} from '../lib/output.js';
-import { withSpinner } from '../lib/progress.js';
-import { getDefaultFormat, isJsonOutput } from '../lib/config.js';
-import type { OutputFormat, Job, BoundingBox } from '../types.js';
+} from '../../lib/output.js';
+import { withSpinner } from '../../lib/progress.js';
+import { getDefaultFormat, isJsonOutput } from '../../lib/config.js';
+import type { OutputFormat, Job, BoundingBox } from '../../types.js';
 
 // Entity response types (matching API)
 interface EntityBbox {
@@ -204,7 +204,7 @@ export function createEntitiesCommand(): Command {
       const pdfBuffer = pdfResponse.body;
 
       // Import the PDF image renderer
-      const { PdfImageRenderer } = await import('../lib/pdf-image.js');
+      const { PdfImageRenderer } = await import('../../lib/pdf-image.js');
 
       // Create output directory
       const outDir = resolve(options.out);

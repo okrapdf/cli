@@ -1,7 +1,12 @@
 /**
- * CLI setup and configuration
+ * CLI setup and configuration.
  *
- * Designed for both human users and AI coding agents.
+ * BYOK-first: `okra parse` uses your own model-provider key (Gemini / NVIDIA /
+ * OpenAI-compatible) and never touches an okra account. The optional okra-cloud
+ * connector lives entirely under `okra cloud` (see ./cloud/index.ts) — this is the
+ * ONLY module that imports from src/cloud/, and only its single registration.
+ *
+ * Designed for both human users and AI coding agents:
  * - Predictable commands and flags
  * - Machine-readable JSON output (-o json)
  * - Composable with pipes (stdin/stdout)
@@ -13,19 +18,9 @@ import chalk from 'chalk';
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-import { createDocsCommand } from './commands/docs.js';
-import { createJobsCommand } from './commands/jobs.js';
-import { createTablesCommand } from './commands/tables.js';
-import { createEntitiesCommand } from './commands/entities.js';
-import { createChatCommand } from './commands/chat.js';
-import { createExtractCommand, createRunCommand } from './commands/shortcuts.js';
-import { createProcessorsCommand } from './commands/processors.js';
-import { createTemplatesCommand } from './commands/templates.js';
-import { createLogsCommand } from './commands/logs.js';
-import { createProvidersCommand, createAuthCommand } from './commands/providers.js';
 import { createParseCommand } from './commands/parse.js';
-import { createReviewCommand } from './commands/review.js';
-import { OkraApiError, EXIT_CODES } from './lib/client.js';
+import { createProvidersCommand, createAuthCommand } from './commands/providers.js';
+import { createCloudCommand } from './cloud/index.js';
 import { error } from './lib/output.js';
 
 const VERSION = readVersion();
@@ -49,33 +44,23 @@ export function createProgram(): Command {
 
   program
     .name('okra')
-    .description('OkraPDF CLI - Extract tables and chat with PDF documents')
+    .description(
+      'Parse PDFs with your own Gemini/NVIDIA/OpenAI-compatible key — layout-aware markdown + 0-1000 bbox blocks. No account required.',
+    )
     .version(VERSION, '-v, --version', 'Output the version number')
     .option('-q, --quiet', 'Suppress non-essential output (ideal for piping)')
     .option('--json', 'Shorthand for -o json (machine-readable output)')
     .option('--no-color', 'Disable colored output');
 
-  // Core commands
-  program.addCommand(createAuthCommand());
-  program.addCommand(createParseCommand()); // BYOK: parse a PDF with your own model key
-  program.addCommand(createDocsCommand());
-  program.addCommand(createJobsCommand());
-  program.addCommand(createTablesCommand());
-  program.addCommand(createEntitiesCommand());
-  program.addCommand(createReviewCommand());
-  program.addCommand(createChatCommand());
+  // Core (BYOK) commands — no okra account, no okra cloud.
+  program.addCommand(createParseCommand()); // headline: parse a PDF with your own key
+  program.addCommand(createAuthCommand()); // BYOK: store a model-provider key
+  program.addCommand(createProvidersCommand()); // list providers + configured status
 
-  // Shortcut commands (most common workflows)
-  program.addCommand(createExtractCommand());
-  program.addCommand(createRunCommand());
+  // Opt-in okra-cloud connector (account-gated; the core parse path never uses it).
+  program.addCommand(createCloudCommand());
 
-  // Introspection commands (vendor-agnostic architecture)
-  program.addCommand(createProcessorsCommand());
-  program.addCommand(createTemplatesCommand());
-  program.addCommand(createLogsCommand());
-  program.addCommand(createProvidersCommand());
-
-  // Handle global --json flag
+  // Handle global --json / --quiet flags
   program.hook('preAction', (thisCommand) => {
     const opts = thisCommand.opts();
     if (opts.json) {
@@ -88,85 +73,40 @@ export function createProgram(): Command {
 
   // Add examples to help
   program.addHelpText('after', `
-${chalk.bold('Quick Start:')}
+${chalk.bold('Quick start (BYOK — bring your own key):')}
 
-  ${chalk.dim('# Set API key (or use OKRA_API_KEY env var)')}
-  $ export OKRA_API_KEY=okra_xxxx
+  ${chalk.dim('# Free Gemini key at https://aistudio.google.com/apikey')}
+  $ export GEMINI_API_KEY=...
+  $ okra parse document.pdf
 
-  ${chalk.dim('# Extract tables from a PDF')}
-  $ okra extract invoice.pdf
+  ${chalk.dim('# Writes ./document.okra/ : doc.md, blocks.json (0-1000 bbox), manifest.json')}
+  $ okra parse document.pdf -o json
 
-  ${chalk.dim('# Ask a question about a document')}
-  $ okra run report.pdf "What is the total revenue?"
+${chalk.bold('Other providers:')}
 
-${chalk.bold('For AI Agents (Machine-Readable Output):')}
+  ${chalk.dim('# NVIDIA NIM (free dev tier at https://build.nvidia.com)')}
+  $ export NVIDIA_API_KEY=... && okra parse doc.pdf --provider nvidia
 
-  ${chalk.dim('# Get tables as JSON (for building presentations, reports)')}
-  $ okra extract document.pdf --json --quiet
+  ${chalk.dim('# Any OpenAI-compatible endpoint (vLLM / Ollama / …)')}
+  $ export OPENAI_BASE_URL=http://localhost:8000/v1 OPENAI_API_KEY=...
+  $ okra parse doc.pdf --provider openai-compatible
 
-  ${chalk.dim('# Get document list as JSON for processing')}
-  $ okra docs list -o json | jq '.[].uuid'
+  ${chalk.dim('# Store a key instead of exporting it, then list providers')}
+  $ okra auth login gemini
+  $ okra providers
 
-  ${chalk.dim('# Extract with specific processor')}
-  $ okra jobs create document.pdf -p gemini --wait -o json
+${chalk.bold('Environment variables:')}
 
-  ${chalk.dim('# Pipe table data to other tools')}
-  $ okra tables get <table-id> -o csv | csvkit ...
+  GEMINI_API_KEY / GOOGLE_API_KEY    Google Gemini (AI Studio) key
+  NVIDIA_API_KEY                     NVIDIA NIM key
+  OPENROUTER_API_KEY                 OpenRouter key
+  OPENAI_BASE_URL + OPENAI_API_KEY   Any OpenAI-compatible endpoint (vLLM / Ollama)
+  OKRA_OUTPUT_FORMAT                 Default output: table | json
 
-${chalk.bold('Common Workflows:')}
+${chalk.bold('Optional okra cloud connector:')}
 
-  ${chalk.dim('# Upload + extract + get results')}
-  $ okra extract invoice.pdf -o json > results.json
-
-  ${chalk.dim('# Use a template for structured extraction')}
-  $ okra extract receipt.pdf --template receipt -o json
-
-  ${chalk.dim('# Interactive document chat')}
-  $ okra chat <document-uuid>
-
-  ${chalk.dim('# List available processors')}
-  $ okra processors list
-
-  ${chalk.dim('# View job history')}
-  $ okra logs
-
-${chalk.bold('Review & Verification:')}
-
-  ${chalk.dim('# Get verification status summary for a job')}
-  $ okra review status <jobId>
-
-  ${chalk.dim('# List pages with verification status')}
-  $ okra review pages <jobId> --status pending
-
-  ${chalk.dim('# List extracted tables for a job')}
-  $ okra review tables <jobId>
-
-  ${chalk.dim('# Open job review page in browser')}
-  $ okra review open <jobId>
-
-${chalk.bold('Entity Image Export:')}
-
-  ${chalk.dim('# Export all entities as PNG images')}
-  $ okra entities images <jobId>
-
-  ${chalk.dim('# Export only tables as JPG with custom output dir')}
-  $ okra entities images <jobId> -t tables -f jpg -o ./table-images
-
-  ${chalk.dim('# List entities with bounding boxes')}
-  $ okra entities list <jobId> --with-bbox
-
-${chalk.bold('Environment Variables:')}
-
-  OKRA_API_KEY        API key (required)
-  OKRA_BASE_URL       Base URL (default: https://okrapdf.com)
-  OKRA_OUTPUT_FORMAT  Default output: table, json, csv (default: table)
-  OKRA_VLM            Default VLM model (e.g., google/gemini-2.5-flash-preview-09-2025)
-
-${chalk.bold('More Information:')}
-
-  Documentation: ${chalk.cyan('https://docs.okrapdf.com/cli')}
-  API Reference: ${chalk.cyan('https://docs.okrapdf.com/api')}
-  GitHub: ${chalk.cyan('https://github.com/steventsao/okrapdf')}
+  ${chalk.dim('# Hosting / sharing / publishing need an okraPDF account')}
+  $ okra cloud --help
 `);
 
   return program;
@@ -186,29 +126,34 @@ export async function run(argv: string[] = process.argv): Promise<void> {
 }
 
 /**
- * Global error handler
+ * Global error handler. Decoupled from the cloud layer: any error carrying a numeric
+ * `exitCode` (cloud's OkraApiError, parse's ParseCommandError) is honored via duck
+ * typing — cli.ts imports nothing from src/cloud/ beyond the command registration.
  */
 function handleError(err: unknown): never {
-  if (err instanceof OkraApiError) {
-    error(err.message);
-
-    if (err.details) {
-      console.error(chalk.dim(JSON.stringify(err.details, null, 2)));
+  if (
+    err &&
+    typeof err === 'object' &&
+    'exitCode' in err &&
+    typeof (err as { exitCode: unknown }).exitCode === 'number'
+  ) {
+    const e = err as { message?: string; exitCode: number; details?: unknown };
+    error(e.message || 'Command failed');
+    if (e.details) {
+      console.error(chalk.dim(JSON.stringify(e.details, null, 2)));
     }
-
-    process.exit(err.exitCode);
+    process.exit(e.exitCode);
   }
 
   if (err instanceof Error) {
-    // Check for common errors
     if (err.message.includes('ENOTFOUND') || err.message.includes('ECONNREFUSED')) {
-      error('Unable to connect to OkraPDF. Check your internet connection.');
-      process.exit(EXIT_CODES.GENERAL_ERROR);
+      error('Unable to connect. Check your internet connection.');
+      process.exit(1);
     }
 
     if (err.message.includes('ETIMEDOUT')) {
       error('Request timed out. Try again later.');
-      process.exit(EXIT_CODES.GENERAL_ERROR);
+      process.exit(1);
     }
 
     error(err.message);
@@ -218,9 +163,9 @@ function handleError(err: unknown): never {
       console.error(err.stack);
     }
 
-    process.exit(EXIT_CODES.GENERAL_ERROR);
+    process.exit(1);
   }
 
   error('An unexpected error occurred');
-  process.exit(EXIT_CODES.GENERAL_ERROR);
+  process.exit(1);
 }

@@ -1,32 +1,35 @@
 /**
- * Authentication commands
+ * okra-cloud auth — flattened onto the `okra cloud` command as
+ * `okra cloud login | logout | whoami | token | status`. This is the OPT-IN okra
+ * account login (OKRA_API_KEY), entirely separate from the top-level BYOK
+ * `okra auth login <provider>` (model-provider keys). Core parsing never uses it.
  */
 
 import { Command } from 'commander';
 import enquirer from 'enquirer';
 const { prompt } = enquirer;
 import chalk from 'chalk';
+import { getConfigPath, isJsonOutput } from '../../lib/config.js';
 import {
   getApiKey,
   setApiKey,
   clearApiKey,
-  getConfigPath,
   isAuthenticated,
   getBaseUrl,
-  isJsonOutput,
-} from '../lib/config.js';
+} from '../lib/okra-config.js';
 import { get, OkraApiError } from '../lib/client.js';
-import { success, error, info, formatOutput } from '../lib/output.js';
-import type { UserInfo } from '../types.js';
+import { success, error, info, formatOutput } from '../../lib/output.js';
+import type { UserInfo } from '../../types.js';
 
-export function createAuthCommand(): Command {
-  const auth = new Command('auth')
-    .description('Manage authentication');
-
-  // auth login
-  auth
+/**
+ * Register the okra-cloud auth verbs directly on the `cloud` command, so they read
+ * as `okra cloud login` etc. (not `okra cloud auth login`).
+ */
+export function addCloudAuthCommands(cloud: Command): void {
+  // okra cloud login
+  cloud
     .command('login')
-    .description('Authenticate with OkraPDF')
+    .description('Authenticate with your okraPDF account (OKRA_API_KEY)')
     .option('-k, --key <key>', 'API key (or set OKRA_API_KEY env var)')
     .action(async (options) => {
       try {
@@ -34,7 +37,7 @@ export function createAuthCommand(): Command {
 
         if (!apiKey) {
           // Interactive prompt
-          console.log(chalk.bold('\nOkraPDF CLI Authentication\n'));
+          console.log(chalk.bold('\nokraPDF cloud login\n'));
           console.log('Get your API key from: ' + chalk.cyan('https://okrapdf.com/settings/api-keys'));
           console.log();
 
@@ -87,10 +90,10 @@ export function createAuthCommand(): Command {
       }
     });
 
-  // auth logout
-  auth
+  // okra cloud logout
+  cloud
     .command('logout')
-    .description('Remove stored credentials')
+    .description('Remove stored okraPDF cloud credentials')
     .action(() => {
       if (!isAuthenticated()) {
         if (isJsonOutput()) {
@@ -109,17 +112,17 @@ export function createAuthCommand(): Command {
       }
     });
 
-  // auth whoami
-  auth
+  // okra cloud whoami
+  cloud
     .command('whoami')
-    .description('Show current authenticated user')
+    .description('Show the current authenticated okraPDF cloud user')
     .option('-o, --output <format>', 'Output format (table, json)', 'table')
     .action(async (options) => {
       if (!isAuthenticated()) {
         if (options.output === 'json' || isJsonOutput()) {
           console.log(formatOutput({ error: 'Not logged in' }, 'json'));
         } else {
-          error('Not logged in. Run `okra auth login` first.');
+          error('Not logged in. Run `okra cloud login` first.');
         }
         process.exit(3);
       }
@@ -141,7 +144,7 @@ export function createAuthCommand(): Command {
           if (options.output === 'json' || isJsonOutput()) {
             console.log(formatOutput({ error: 'Session expired' }, 'json'));
           } else {
-            error('Session expired. Run `okra auth login` again.');
+            error('Session expired. Run `okra cloud login` again.');
           }
           process.exit(3);
         }
@@ -149,10 +152,10 @@ export function createAuthCommand(): Command {
       }
     });
 
-  // auth token
-  auth
+  // okra cloud token
+  cloud
     .command('token')
-    .description('Print current API token (for piping)')
+    .description('Print the current okraPDF cloud API token (for piping)')
     .action(() => {
       const key = getApiKey();
       if (!key) {
@@ -163,10 +166,10 @@ export function createAuthCommand(): Command {
       process.stdout.write(key);
     });
 
-  // auth status
-  auth
+  // okra cloud status
+  cloud
     .command('status')
-    .description('Check authentication status')
+    .description('Check okraPDF cloud authentication status')
     .option('-o, --output <format>', 'Output format (table, json)', 'table')
     .action(async (options) => {
       const key = getApiKey();
@@ -177,7 +180,7 @@ export function createAuthCommand(): Command {
           console.log(formatOutput({ authenticated: false, message: 'Not authenticated' }, 'json'));
         } else {
           console.log(chalk.yellow('Status:'), 'Not authenticated');
-          console.log(chalk.dim('Run `okra auth login` to authenticate'));
+          console.log(chalk.dim('Run `okra cloud login` to authenticate'));
         }
         return;
       }
@@ -239,6 +242,4 @@ export function createAuthCommand(): Command {
         }
       }
     });
-
-  return auth;
 }

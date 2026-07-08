@@ -14,11 +14,11 @@ import {
   success,
   error,
   info,
-} from '../lib/output.js';
-import { withSpinner, pollWithProgress, sleep } from '../lib/progress.js';
-import { getDefaultFormat, isJsonOutput } from '../lib/config.js';
+} from '../../lib/output.js';
+import { withSpinner, pollWithProgress, sleep } from '../../lib/progress.js';
+import { getDefaultFormat, isJsonOutput } from '../../lib/config.js';
 import { openInBrowser, getJobWebUrl } from '../lib/browser.js';
-import type { Job, CreateJobResponse, JobResults, JobResultsApiResponse, PaginatedResponse, SignedUrlResponse, OutputFormat, NormalizedJob } from '../types.js';
+import type { Job, CreateJobResponse, JobResults, JobResultsApiResponse, PaginatedResponse, SignedUrlResponse, OutputFormat, NormalizedJob } from '../../types.js';
 
 /**
  * Normalize a job object to have consistent field names

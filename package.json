@@ -1,7 +1,7 @@
 {
   "name": "@okrapdf/cli",
   "version": "0.17.0-dev.0",
-  "description": "OkraPDF command-line interface for PDF extraction and document chat",
+  "description": "BYOK PDF parsing CLI — bring your own Gemini/NVIDIA/OpenAI-compatible key. Layout-aware markdown + bbox blocks. okraPDF cloud optional.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -25,6 +25,9 @@
   "keywords": [
     "okrapdf",
     "pdf",
+    "byok",
+    "vlm",
+    "layout",
     "ocr",
     "extraction",
     "cli",
@@ -33,7 +36,7 @@
     "ai",
     "document-processing"
   ],
-  "author": "OkraPDF",
+  "author": "okraPDF",
   "license": "MIT",
   "repository": {
     "type": "git",

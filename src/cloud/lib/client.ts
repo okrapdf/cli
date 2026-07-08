@@ -3,8 +3,8 @@
  */
 
 import got, { type Got, type Options, type Response } from 'got';
-import { getApiKey, getBaseUrl } from './config.js';
-import type { ApiResponse, ApiError } from '../types.js';
+import { getApiKey, getBaseUrl } from './okra-config.js';
+import type { ApiResponse, ApiError } from '../../types.js';
 
 // Exit codes
 export const EXIT_CODES = {
