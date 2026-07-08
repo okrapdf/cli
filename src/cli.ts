@@ -23,6 +23,7 @@ import { createProcessorsCommand } from './commands/processors.js';
 import { createTemplatesCommand } from './commands/templates.js';
 import { createLogsCommand } from './commands/logs.js';
 import { createProvidersCommand, createAuthCommand } from './commands/providers.js';
+import { createParseCommand } from './commands/parse.js';
 import { createReviewCommand } from './commands/review.js';
 import { OkraApiError, EXIT_CODES } from './lib/client.js';
 import { error } from './lib/output.js';
@@ -56,6 +57,7 @@ export function createProgram(): Command {
 
   // Core commands
   program.addCommand(createAuthCommand());
+  program.addCommand(createParseCommand()); // BYOK: parse a PDF with your own model key
   program.addCommand(createDocsCommand());
   program.addCommand(createJobsCommand());
   program.addCommand(createTablesCommand());
