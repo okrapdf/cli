@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * OkraPDF CLI - Entry Point
+ * okraPDF CLI - Entry Point
  *
- * A command-line interface for OkraPDF that provides:
+ * A command-line interface for okraPDF that provides:
  * - Document management (upload, list, download, delete)
  * - OCR job management (create, status, results, export)
  * - Table extraction and export

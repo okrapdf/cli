@@ -1,13 +1,14 @@
 {
   "name": "@okrapdf/cli",
-  "version": "0.2.11",
-  "description": "OkraPDF command-line interface for PDF extraction and document chat",
+  "version": "0.17.0-dev.0",
+  "description": "BYOK PDF parsing CLI — bring your own Gemini/NVIDIA/OpenAI-compatible key. Layout-aware markdown + bbox blocks. okraPDF cloud optional.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
     "okra": "./dist/index.js"
   },
+  "packageManager": "pnpm@11.9.0",
   "publishConfig": {
     "access": "public"
   },
@@ -19,12 +20,14 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "lint": "eslint src/**/*.ts",
-    "prepublishOnly": "npm run build",
-    "release": "npm version patch && npm publish --access public"
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "okrapdf",
     "pdf",
+    "byok",
+    "vlm",
+    "layout",
     "ocr",
     "extraction",
     "cli",
@@ -33,7 +36,7 @@
     "ai",
     "document-processing"
   ],
-  "author": "OkraPDF",
+  "author": "okraPDF",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -44,7 +47,7 @@
     "url": "https://github.com/okrapdf/cli/issues"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22"
   },
   "dependencies": {
     "chalk": "^5.3.0",
@@ -55,21 +58,24 @@
     "enquirer": "^2.4.1",
     "form-data": "^4.0.0",
     "got": "^14.4.2",
+    "mupdf": "^0.3.0",
     "ora": "^8.0.1",
+    "sharp": "^0.33.5",
     "ws": "^8.18.0"
   },
-  "optionalDependencies": {
-    "mupdf": "^0.3.0",
-    "sharp": "^0.33.5"
-  },
   "devDependencies": {
-    "@types/node": "^20.14.0",
+    "@types/node": "^22.10.0",
     "@types/ws": "^8.5.12",
     "typescript": "^5.5.0",
+    "undici": "^6.21.0",
     "vitest": "^2.0.0"
   },
   "files": [
     "dist",
+    "!dist/**/*.test.js",
+    "!dist/**/*.test.d.ts",
+    "!dist/**/*.test.js.map",
+    "!dist/**/*.test.d.ts.map",
     "README.md",
     "LICENSE"
   ]

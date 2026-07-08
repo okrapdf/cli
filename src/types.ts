@@ -170,6 +170,12 @@ export interface PaginatedResponse<T> {
   };
 }
 
+// BYOK provider config, stored under `providers.<id>` in the conf store (DESIGN.md #2).
+export interface ProviderConfigEntry {
+  api_key?: string;
+  base_url?: string;
+}
+
 // Config types
 export interface CliConfig {
   api_key?: string;
@@ -177,6 +183,7 @@ export interface CliConfig {
   default_format: OutputFormat;
   default_ocr?: OcrEngine;
   default_vlm?: VlmModel;
+  providers?: Record<string, ProviderConfigEntry>;
 }
 
 // Upload types - API returns camelCase

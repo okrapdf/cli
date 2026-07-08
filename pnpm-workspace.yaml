@@ -1,0 +1,9 @@
+# Single-package repo. pnpm 11 build-script approval lives here.
+# esbuild backs vitest; sharp rasterizes PDF pages. Both are trusted, first-party-ish
+# native deps required for test + parse — approved to run their install scripts.
+allowBuilds:
+  esbuild: true
+  sharp: true
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
