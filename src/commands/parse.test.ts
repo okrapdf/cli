@@ -139,6 +139,35 @@ describe('runParse — failure modes + exit codes', () => {
       exitCode: PARSE_EXIT.INVALID_ARGS,
     });
   });
+
+  // #16 — arg-shape validation runs BEFORE key resolution, so a bad flag fails with
+  // INVALID_ARGS (exit 2) even when no provider key is present (which would be exit 1).
+  it('validates --pages shape before key resolution (bad pages + no key → INVALID_ARGS, not missing-key)', async () => {
+    await expect(
+      runParse(FIXTURE, { provider: 'gemini', pages: 'x-y', out: outDir }, noCreds),
+    ).rejects.toMatchObject({
+      exitCode: PARSE_EXIT.INVALID_ARGS,
+      message: expect.stringMatching(/--pages/),
+    });
+  });
+
+  it('validates --concurrency shape before key resolution (no key present)', async () => {
+    await expect(
+      runParse(FIXTURE, { provider: 'gemini', concurrency: '0', out: outDir }, noCreds),
+    ).rejects.toMatchObject({
+      exitCode: PARSE_EXIT.INVALID_ARGS,
+      message: expect.stringMatching(/--concurrency/),
+    });
+  });
+
+  it('validates --dpi shape before key resolution (no key present)', async () => {
+    await expect(
+      runParse(FIXTURE, { provider: 'gemini', dpi: 'abc', out: outDir }, noCreds),
+    ).rejects.toMatchObject({
+      exitCode: PARSE_EXIT.INVALID_ARGS,
+      message: expect.stringMatching(/--dpi/),
+    });
+  });
 });
 
 describe('createParseCommand — -o json stdout envelope', () => {

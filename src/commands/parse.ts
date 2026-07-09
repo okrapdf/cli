@@ -153,7 +153,16 @@ export async function runParse(
     );
   }
 
-  // 4. resolve key + base URL (flag > env > config). Resolution errors are user-facing
+  // 4. validate arg SHAPES before resolving the key (#16). A bad --pages/--concurrency/--dpi
+  //    is an argument error (INVALID_ARGS, exit 2) and must surface as such even when no
+  //    provider key is present — otherwise the missing-key error (exit 1) masks it.
+  const pages = options.pages ? parsePageRange(options.pages) : undefined;
+  const concurrency = options.concurrency
+    ? parsePositiveInt(options.concurrency, '--concurrency')
+    : undefined;
+  const dpi = options.dpi ? parsePositiveInt(options.dpi, '--dpi') : undefined;
+
+  // 5. resolve key + base URL (flag > env > config). Resolution errors are user-facing
   //    (name the exact env var / `okra auth login`) — surface them verbatim.
   let resolved;
   try {
@@ -167,7 +176,7 @@ export async function runParse(
     throw new ParseCommandError(err instanceof Error ? err.message : String(err), PARSE_EXIT.ERROR);
   }
 
-  // 5. model (default: provider default)
+  // 6. model (default: provider default)
   const model = options.model || provider.defaultModel;
   if (!model) {
     throw new ParseCommandError(
@@ -175,12 +184,6 @@ export async function runParse(
       PARSE_EXIT.INVALID_ARGS,
     );
   }
-
-  const pages = options.pages ? parsePageRange(options.pages) : undefined;
-  const concurrency = options.concurrency
-    ? parsePositiveInt(options.concurrency, '--concurrency')
-    : undefined;
-  const dpi = options.dpi ? parsePositiveInt(options.dpi, '--dpi') : undefined;
 
   const client = createClient(resolved);
   const pdf = new Uint8Array(readFileSync(filePath));
