@@ -309,7 +309,7 @@ export function createExtractCommand(): Command {
         if (!isAuthenticated()) {
           if (!options.quiet) {
             info('No authentication found - using anonymous mode (3 extracts/day)');
-            info('Run `okra auth login` for unlimited access');
+            info('Run `okra cloud login` for unlimited access');
           }
 
           // Use anonymous public endpoint
@@ -427,7 +427,7 @@ export function createExtractCommand(): Command {
       // File uploads require authentication
       if (!isAuthenticated()) {
         error('File uploads require authentication.');
-        info('Run `okra auth login` to authenticate, or use a URL instead:');
+        info('Run `okra cloud login` to authenticate, or use a URL instead:');
         info('  npx @okrapdf/cli extract https://example.com/document.pdf');
         process.exit(EXIT_CODES.AUTH_ERROR);
       }
@@ -672,7 +672,7 @@ async function extractAnonymous(url: string, quiet: boolean): Promise<JobResults
       if (body?.resetAt) {
         info(`Limit resets at: ${body.resetAt}`);
       }
-      info('Run `okra auth login` for unlimited access.');
+      info('Run `okra cloud login` for unlimited access.');
       process.exit(EXIT_CODES.RATE_LIMITED);
     }
 

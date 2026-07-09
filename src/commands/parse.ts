@@ -19,6 +19,7 @@ import ora from 'ora';
 import { formatOutput, error, info } from '../lib/output.js';
 import { getDefaultFormat, isJsonOutput, getProviderConfig } from '../lib/config.js';
 import { PROVIDERS, getProvider, resolveProvider } from '../providers/registry.js';
+import type { ProviderSpec } from '../providers/types.js';
 import { createClient } from '../providers/client.js';
 import { costUsdOrUndefined } from '../providers/pricing.js';
 import { PARSERS, getParser, DEFAULT_PARSER_ID } from '../parsers/registry.js';
@@ -49,6 +50,7 @@ export interface ParseCliOptions {
   dpi?: string;
   apiKey?: string;
   baseUrl?: string;
+  allowEmpty?: boolean;
   output?: string;
 }
 
@@ -114,6 +116,39 @@ function parsePositiveInt(raw: string, flag: string): number {
   return n;
 }
 
+/** Numeric HTTP status carried by a transport/page error, if any. */
+function numericStatus(err: unknown): number | undefined {
+  if (err && typeof err === 'object' && 'status' in err) {
+    const s = (err as { status?: unknown }).status;
+    if (typeof s === 'number') return s;
+  }
+  return undefined;
+}
+
+/**
+ * Turn a parseDocument failure into a ParseCommandError (#15). For auth-shaped HTTP
+ * failures (400/401/403) append an actionable hint naming the provider's env var and
+ * `okra auth login <provider>`. BYOK-only copy — never mentions an okra account.
+ */
+function augmentParseFailure(
+  err: unknown,
+  provider: ProviderSpec,
+  providerId: string,
+): ParseCommandError {
+  const message = err instanceof Error ? err.message : String(err);
+  const status = numericStatus(err);
+  if (status === 400 || status === 401 || status === 403) {
+    const envVar = provider.envKeys[0];
+    const checkKey = envVar ? `check ${envVar}` : 'check your provider credentials';
+    return new ParseCommandError(
+      `${message}\nAuthentication failed (HTTP ${status}) — ${checkKey}, or set a valid key with ` +
+        `\`okra auth login ${providerId}\`.`,
+      PARSE_EXIT.ERROR,
+    );
+  }
+  return new ParseCommandError(message, PARSE_EXIT.ERROR);
+}
+
 /**
  * Run a parse end-to-end and write the three artifacts. Returns the envelope +
  * manifest. Throws `ParseCommandError` (never exits) so it is fully testable.
@@ -153,7 +188,16 @@ export async function runParse(
     );
   }
 
-  // 4. resolve key + base URL (flag > env > config). Resolution errors are user-facing
+  // 4. validate arg SHAPES before resolving the key (#16). A bad --pages/--concurrency/--dpi
+  //    is an argument error (INVALID_ARGS, exit 2) and must surface as such even when no
+  //    provider key is present — otherwise the missing-key error (exit 1) masks it.
+  const pages = options.pages ? parsePageRange(options.pages) : undefined;
+  const concurrency = options.concurrency
+    ? parsePositiveInt(options.concurrency, '--concurrency')
+    : undefined;
+  const dpi = options.dpi ? parsePositiveInt(options.dpi, '--dpi') : undefined;
+
+  // 5. resolve key + base URL (flag > env > config). Resolution errors are user-facing
   //    (name the exact env var / `okra auth login`) — surface them verbatim.
   let resolved;
   try {
@@ -167,7 +211,7 @@ export async function runParse(
     throw new ParseCommandError(err instanceof Error ? err.message : String(err), PARSE_EXIT.ERROR);
   }
 
-  // 5. model (default: provider default)
+  // 6. model (default: provider default)
   const model = options.model || provider.defaultModel;
   if (!model) {
     throw new ParseCommandError(
@@ -176,30 +220,32 @@ export async function runParse(
     );
   }
 
-  const pages = options.pages ? parsePageRange(options.pages) : undefined;
-  const concurrency = options.concurrency
-    ? parsePositiveInt(options.concurrency, '--concurrency')
-    : undefined;
-  const dpi = options.dpi ? parsePositiveInt(options.dpi, '--dpi') : undefined;
-
   const client = createClient(resolved);
   const pdf = new Uint8Array(readFileSync(filePath));
 
-  const result = await parseDocument(pdf, {
-    parser,
-    vlm: client,
-    model,
-    providerId,
-    pages,
-    concurrency,
-    dpi,
-    // pass the pricing hook from providers/ (the engine never imports it).
-    pricing: costUsdOrUndefined,
-    signal: undefined,
-    onProgress: deps.onProgress,
-  });
+  let result: DocumentParse;
+  try {
+    result = await parseDocument(pdf, {
+      parser,
+      vlm: client,
+      model,
+      providerId,
+      pages,
+      concurrency,
+      dpi,
+      allowEmpty: options.allowEmpty,
+      // pass the pricing hook from providers/ (the engine never imports it).
+      pricing: costUsdOrUndefined,
+      signal: undefined,
+      onProgress: deps.onProgress,
+    });
+  } catch (err) {
+    // Parse/transport failures (bad key, upstream error, all-zero-block guard) surface as
+    // user-facing ParseCommandErrors; auth-shaped ones get an actionable hint appended.
+    throw augmentParseFailure(err, provider, providerId);
+  }
 
-  // 6. write artifacts under <out>/ (default ./<pdf-basename>.okra/)
+  // 7. write artifacts under <out>/ (default ./<pdf-basename>.okra/)
   const base = basename(filePath).replace(/\.pdf$/i, '');
   const outDir = options.out ? resolve(options.out) : resolve(process.cwd(), `${base}.okra`);
   mkdirSync(outDir, { recursive: true });
@@ -250,6 +296,7 @@ export function createParseCommand(): Command {
     .option('--pages <range>', 'Page range, e.g. 1-5 (default: all pages)')
     .option('--concurrency <n>', 'Max pages parsed in parallel (default: 4)')
     .option('--dpi <n>', 'Rasterization DPI (default: 175)')
+    .option('--allow-empty', 'Do not fail when every page decodes 0 blocks (keep the empty result)')
     .option('--api-key <key>', 'Provider API key (overrides env / config)')
     .option('--base-url <url>', 'Provider base URL (required for openai-compatible)')
     .option('-o, --output <format>', 'Output format (table, json)', getDefaultFormat())

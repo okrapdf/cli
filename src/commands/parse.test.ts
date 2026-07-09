@@ -139,6 +139,104 @@ describe('runParse — failure modes + exit codes', () => {
       exitCode: PARSE_EXIT.INVALID_ARGS,
     });
   });
+
+  // #16 — arg-shape validation runs BEFORE key resolution, so a bad flag fails with
+  // INVALID_ARGS (exit 2) even when no provider key is present (which would be exit 1).
+  it('validates --pages shape before key resolution (bad pages + no key → INVALID_ARGS, not missing-key)', async () => {
+    await expect(
+      runParse(FIXTURE, { provider: 'gemini', pages: 'x-y', out: outDir }, noCreds),
+    ).rejects.toMatchObject({
+      exitCode: PARSE_EXIT.INVALID_ARGS,
+      message: expect.stringMatching(/--pages/),
+    });
+  });
+
+  it('validates --concurrency shape before key resolution (no key present)', async () => {
+    await expect(
+      runParse(FIXTURE, { provider: 'gemini', concurrency: '0', out: outDir }, noCreds),
+    ).rejects.toMatchObject({
+      exitCode: PARSE_EXIT.INVALID_ARGS,
+      message: expect.stringMatching(/--concurrency/),
+    });
+  });
+
+  it('validates --dpi shape before key resolution (no key present)', async () => {
+    await expect(
+      runParse(FIXTURE, { provider: 'gemini', dpi: 'abc', out: outDir }, noCreds),
+    ).rejects.toMatchObject({
+      exitCode: PARSE_EXIT.INVALID_ARGS,
+      message: expect.stringMatching(/--dpi/),
+    });
+  });
+
+  // #15 — a provider 400 (bad key) surfaces as: attempts actually made (not "retries"),
+  // the provider's own body snippet, and an actionable auth hint. Exit 1.
+  // Own origin so the happy-path 200 `.persist()` intercept (same file) can't shadow it.
+  it('surfaces a provider 400 with attempts + body snippet + auth hint (exit 1)', async () => {
+    const ORIGIN_400 = 'https://fake-vlm-badkey.test';
+    agent()
+      .get(ORIGIN_400)
+      .intercept({ path: '/v1/chat/completions', method: 'POST' })
+      .reply(400, 'Invalid API key provided')
+      .persist();
+    const err = (await runParse(
+      FIXTURE,
+      { ...okOpts(), baseUrl: `${ORIGIN_400}/v1` },
+      noCreds,
+    ).catch((e) => e)) as {
+      exitCode?: number;
+      message: string;
+    };
+    expect(err.exitCode).toBe(PARSE_EXIT.ERROR);
+    expect(err.message).toContain('after 1 attempt'); // attempts actually made, not the setting
+    expect(err.message).not.toMatch(/after \d+ retries/); // the old lie is gone
+    expect(err.message).toContain('Invalid API key provided'); // provider body snippet
+    expect(err.message).toContain('OPENAI_API_KEY'); // env-var hint
+    expect(err.message).toContain('okra auth login openai-compatible'); // command hint
+  });
+
+  // #13 — a model whose output decodes 0 blocks on every page fails (exit 1) instead of
+  // writing an empty-but-"successful" result; --allow-empty opts back into the empty result.
+  it('rejects an all-zero-block parse (exit 1), naming the model + --allow-empty (#13)', async () => {
+    const ORIGIN_ZERO = 'https://fake-vlm-zero.test';
+    agent()
+      .get(ORIGIN_ZERO)
+      .intercept({ path: '/v1/chat/completions', method: 'POST' })
+      .reply(200, {
+        choices: [{ message: { content: 'sorry, no layout tags in this reply' } }],
+        usage: { prompt_tokens: 10, completion_tokens: 25 },
+      })
+      .persist();
+    const err = (await runParse(
+      FIXTURE,
+      { ...okOpts(), model: 'nemo-vl', baseUrl: `${ORIGIN_ZERO}/v1` },
+      noCreds,
+    ).catch((e) => e)) as { exitCode?: number; message: string };
+    expect(err.exitCode).toBe(PARSE_EXIT.ERROR);
+    expect(err.message).toContain('nemo-vl');
+    expect(err.message).toMatch(/0 (layout )?blocks/i);
+    expect(err.message).toContain('--allow-empty');
+  });
+
+  it('--allow-empty keeps an all-zero-block result (no throw) and writes the artifacts (#13)', async () => {
+    const ORIGIN_ZERO = 'https://fake-vlm-zero2.test';
+    agent()
+      .get(ORIGIN_ZERO)
+      .intercept({ path: '/v1/chat/completions', method: 'POST' })
+      .reply(200, {
+        choices: [{ message: { content: 'no layout' } }],
+        usage: { prompt_tokens: 10, completion_tokens: 25 },
+      })
+      .persist();
+    const { envelope } = await runParse(
+      FIXTURE,
+      { ...okOpts(), model: 'nemo-vl', baseUrl: `${ORIGIN_ZERO}/v1`, allowEmpty: true },
+      noCreds,
+    );
+    expect(envelope.meta.pageCount).toBe(2);
+    expect(envelope.pages.every((p) => p.blockCount === 0)).toBe(true);
+    expect(existsSync(join(outDir, 'doc.md'))).toBe(true);
+  });
 });
 
 describe('createParseCommand — -o json stdout envelope', () => {

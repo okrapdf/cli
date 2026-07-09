@@ -25,6 +25,46 @@ import { error } from './lib/output.js';
 
 const VERSION = readVersion();
 
+/**
+ * v0.2.x top-level commands that moved under `okra cloud` (DESIGN.md #5), mapped to
+ * their `okra cloud <sub>` home. `auth` is special-cased: the old okra-cloud login
+ * `okra auth login` became `okra cloud login` (the top-level `okra auth login <provider>`
+ * is now BYOK-only). `auth` stays a real top-level command, so its entry is only ever
+ * reached by a direct lookup — it documents the rename for anyone typing `okra auth …`.
+ */
+const MOVED_TO_CLOUD: Record<string, string> = {
+  auth: 'login',
+  docs: 'docs',
+  jobs: 'jobs',
+  tables: 'tables',
+  entities: 'entities',
+  chat: 'chat',
+  extract: 'extract',
+  run: 'run',
+  processors: 'processors',
+  templates: 'templates',
+  logs: 'logs',
+  review: 'review',
+};
+
+/** The `okra cloud <sub>` home for a v0.2.x command that moved, or undefined. */
+export function cloudSuggestionFor(name: string): string | undefined {
+  return MOVED_TO_CLOUD[name];
+}
+
+/**
+ * Handle an unknown top-level command: keep commander's native wording, then, when the
+ * name matches a command that moved under `okra cloud`, point at its new home. Exit 1.
+ */
+function reportUnknownCommand(name: string): void {
+  console.error(`error: unknown command '${name}'`);
+  const movedTo = cloudSuggestionFor(name);
+  if (movedTo) {
+    console.error(`did you mean: okra cloud ${movedTo}?`);
+  }
+  process.exit(1);
+}
+
 function readVersion(): string {
   try {
     const currentDir = dirname(fileURLToPath(import.meta.url));
@@ -59,6 +99,13 @@ export function createProgram(): Command {
 
   // Opt-in okra-cloud connector (account-gated; the core parse path never uses it).
   program.addCommand(createCloudCommand());
+
+  // Unknown-command did-you-mean (#18). Commander emits `command:*` for an unrecognized
+  // command when a listener is registered (and then skips its own error), so we own the
+  // message: commander's native wording plus an `okra cloud <sub>` hint for moved commands.
+  program.on('command:*', (operands: string[]) => {
+    reportUnknownCommand(operands[0] ?? '');
+  });
 
   // Handle global --json / --quiet flags
   program.hook('preAction', (thisCommand) => {

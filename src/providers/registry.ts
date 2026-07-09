@@ -30,14 +30,14 @@ export const PROVIDERS: ProviderSpec[] = [
     api: 'openai-chat',
     envKeys: ['NVIDIA_API_KEY'],
     baseUrl: 'https://integrate.api.nvidia.com/v1',
-    // Ids verified against the live /v1/models response 2026-07-08. Curated list
-    // intentionally short — verify live availability before extending.
-    defaultModel: 'nvidia/llama-3.1-nemotron-nano-vl-8b-v1',
-    models: [
-      { id: 'nvidia/llama-3.1-nemotron-nano-vl-8b-v1', vision: true },
-      { id: 'meta/llama-3.2-90b-vision-instruct', vision: true },
-      { id: 'microsoft/phi-3-vision-128k-instruct', vision: true },
-    ],
+    // Verified against a live probe 2026-07-08: meta/llama-3.2-90b-vision-instruct is the
+    // one curated NVIDIA model that decodes layout blocks with these prompts (~4.7s/page).
+    // Two others were REMOVED after that probe: microsoft/phi-3-vision-128k-instruct is
+    // listed by /v1/models but 404s on chat/completions (retired/renamed for invoke), and
+    // nvidia/llama-3.1-nemotron-nano-vl-8b-v1 transports fine but returns output the layout
+    // decoder can't parse (0 blocks) — it was the old default and the #13 exit-0 trap.
+    defaultModel: 'meta/llama-3.2-90b-vision-instruct',
+    models: [{ id: 'meta/llama-3.2-90b-vision-instruct', vision: true }],
     keyHint: 'Key at https://build.nvidia.com (free dev tier)',
   },
   {

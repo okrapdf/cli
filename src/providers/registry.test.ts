@@ -150,4 +150,20 @@ describe('resolveProvider', () => {
       expect(() => resolveProvider(s, inputs())).toThrow(new RegExp(s.envKeys[0]));
     }
   });
+
+  // #13 — after live probes (2026-07-08): the old default nemotron-nano-vl emits output the
+  // layout decoder can't parse (0 blocks), and phi-3-vision 404s on chat/completions. Only
+  // meta/llama-3.2-90b-vision-instruct decodes blocks with the layout prompts.
+  describe('nvidia curated models (#13)', () => {
+    it('defaults to the layout-decodable meta/llama-3.2-90b-vision-instruct', () => {
+      expect(spec('nvidia').defaultModel).toBe('meta/llama-3.2-90b-vision-instruct');
+    });
+
+    it('curates ONLY that model — nemotron-nano-vl and phi-3-vision are removed', () => {
+      const ids = spec('nvidia').models.map((m) => m.id);
+      expect(ids).toEqual(['meta/llama-3.2-90b-vision-instruct']);
+      expect(ids).not.toContain('nvidia/llama-3.1-nemotron-nano-vl-8b-v1');
+      expect(ids).not.toContain('microsoft/phi-3-vision-128k-instruct');
+    });
+  });
 });

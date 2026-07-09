@@ -45,6 +45,15 @@ export interface ParseDocumentOptions {
    * Added per worker CONTRACT-NOTE (architect pre-approved exactly this field) — DESIGN.md #4.
    */
   pricing?: (model: string, usage: TokenUsage) => number | undefined;
+  /**
+   * When EVERY page decodes 0 blocks, parseDocument rejects (the model almost certainly
+   * doesn't fit the layout-block prompt — transport worked, output didn't) instead of
+   * returning an empty-but-"successful" result. Set true to keep the empty result
+   * (exposed as `okra parse --allow-empty`). Default false. (#13)
+   *
+   * Added per worker CONTRACT-NOTE (architect pre-approved exactly this field) — issue #13.
+   */
+  allowEmpty?: boolean;
   signal?: AbortSignal;
   onProgress?: (done: number, total: number) => void;
 }
@@ -71,6 +80,25 @@ function isRetryable(err: unknown): boolean {
   return err instanceof VlmHttpError && (err.status === 429 || err.status >= 500);
 }
 
+/**
+ * A page that failed after all attempts. Carries the count of attempts ACTUALLY made
+ * (#15 — the message must not claim retries that never ran) and the underlying HTTP
+ * status, so the command layer can add an auth hint for 400/401/403.
+ */
+export class PageParseError extends Error {
+  constructor(
+    message: string,
+    readonly page: number,
+    /** Attempts actually made (1 = failed on the first try, no retries). */
+    readonly attempts: number,
+    /** Underlying transport HTTP status, when the failure was a VlmHttpError. */
+    readonly status?: number,
+  ) {
+    super(message);
+    this.name = 'PageParseError';
+  }
+}
+
 async function parsePageWithRetry(
   parser: Parser,
   input: PageInput,
@@ -82,11 +110,22 @@ async function parsePageWithRetry(
     try {
       return await parser.parsePage(input, ctx);
     } catch (err) {
-      if (!isRetryable(err) || attempt >= retries) throw err;
-      // exponential backoff with full jitter: rand(0, base·2^attempt).
-      const ceiling = BACKOFF_BASE_MS * 2 ** attempt;
+      attempt++; // count the try we just made
+      if (!isRetryable(err) || attempt > retries) {
+        // Report the attempts actually made — never the `retries` setting (the old bug:
+        // a non-retryable 400 ran once but the message claimed "after N retries").
+        const detail = err instanceof Error ? err.message : String(err);
+        const status = err instanceof VlmHttpError ? err.status : undefined;
+        throw new PageParseError(
+          `Failed to parse page ${input.page} after ${attempt} ${attempt === 1 ? 'attempt' : 'attempts'}: ${detail}`,
+          input.page,
+          attempt,
+          status,
+        );
+      }
+      // exponential backoff with full jitter: rand(0, base·2^(attempt-1)).
+      const ceiling = BACKOFF_BASE_MS * 2 ** (attempt - 1);
       await sleep(ceiling + Math.random() * ceiling);
-      attempt++;
     }
   }
 }
@@ -130,12 +169,9 @@ export async function parseDocument(
         done++;
         opts.onProgress?.(done, total);
       } catch (err) {
-        if (firstError === undefined) {
-          const detail = err instanceof Error ? err.message : String(err);
-          firstError = new Error(
-            `Failed to parse page ${input.page} after ${retries} ${retries === 1 ? 'retry' : 'retries'}: ${detail}`,
-          );
-        }
+        // parsePageWithRetry already composed a page-naming message with the attempts
+        // actually made + the underlying status; keep the first failure verbatim.
+        if (firstError === undefined) firstError = err;
         return;
       }
     }
@@ -153,6 +189,22 @@ export async function parseDocument(
   const warnings: string[] = [];
   for (const p of pages) {
     if (p.blocks.length === 0) warnings.push(`page ${p.page}: 0 blocks decoded`);
+  }
+
+  // #13 — a run where EVERY page decoded 0 blocks is almost always a wrong/unsupported
+  // model: the transport worked (the model answered) but its output didn't match the
+  // layout-block format, so nothing decoded. Fail loudly instead of returning an
+  // empty-but-"successful" result — unless the caller opted into empties (--allow-empty).
+  // Partial zero-block pages stay warnings (above). `blocks` is the flat all-page list,
+  // so blocks.length === 0 ⟺ every page decoded zero.
+  if (total > 0 && blocks.length === 0 && !opts.allowEmpty) {
+    const modelName = opts.model ?? '(default model)';
+    throw new Error(
+      `Parsed ${total} page${total === 1 ? '' : 's'} with model "${modelName}" but decoded 0 layout blocks total. ` +
+        `The model responded (${usage.outputTokens} output tokens) — its output just didn't contain the expected ` +
+        `layout blocks, so nothing decoded. Try a different --model or --provider (some vision models don't follow ` +
+        `the layout-block prompt), or re-run with --allow-empty to keep the empty result.`,
+    );
   }
 
   // Cost via the injected hook only — the engine never imports providers/pricing.

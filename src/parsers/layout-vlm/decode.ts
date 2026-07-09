@@ -6,6 +6,12 @@
  *
  * RawBlock.page is optional here (only multipage prompts emit data-page); the parser
  * fills the authoritative page number from PageInput when mapping to core LayoutBlock.
+ *
+ * DELIBERATE DEVIATION from the vendored source (#17): `itemsToMarkdown` strips a leading
+ * markdown heading marker (`#{1,6}\s+`) from Title/Section-header block text before adding
+ * its own `#`/`##` prefix. Some models emit a heading already pre-hashed inside the block
+ * text; the upstream code prefixed unconditionally, producing a double `# # Foo`. Formula
+ * text is kept verbatim (never stripped); plain Text blocks are untouched.
  */
 
 export type RawBlock = {
@@ -98,6 +104,15 @@ export function swapGeminiBbox(blocks: RawBlock[]): RawBlock[] {
   });
 }
 
+/**
+ * Strip a single leading markdown heading marker (`#{1,6}` + whitespace) so heading
+ * block text that already arrives pre-hashed isn't prefixed a second time (#17).
+ * Only applied to heading labels; mid-text hashes and non-heading blocks are untouched.
+ */
+function stripLeadingHeadingMarker(text: string): string {
+  return text.replace(/^#{1,6}\s+/, '');
+}
+
 /** Reading-order markdown from blocks (Title → #, Section-header → ##, Formula → $$). */
 export function itemsToMarkdown(blocks: RawBlock[]): string {
   const parts: string[] = [];
@@ -105,8 +120,9 @@ export function itemsToMarkdown(blocks: RawBlock[]): string {
     const label = block.label.toLowerCase();
     const text = block.text;
     if (!text) continue;
-    if (label === 'title') parts.push(`# ${text}`);
-    else if (label === 'section-header' || label === 'section_header') parts.push(`## ${text}`);
+    if (label === 'title') parts.push(`# ${stripLeadingHeadingMarker(text)}`);
+    else if (label === 'section-header' || label === 'section_header')
+      parts.push(`## ${stripLeadingHeadingMarker(text)}`);
     else if (label === 'formula') parts.push(`$$\n${text}\n$$`);
     else parts.push(text);
   }

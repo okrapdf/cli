@@ -138,6 +138,42 @@ describe('itemsToMarkdown', () => {
   it('returns an empty string when every block is empty', () => {
     expect(itemsToMarkdown([{ bbox: [0, 0, 0, 0], label: 'Text', text: '' }])).toBe('');
   });
+
+  // #17 — strip a leading markdown heading marker from Title/Section-header text so a
+  // model that already emits `# Foo` inside a Title block doesn't yield a double `# # Foo`.
+  it('leaves a plain Title without a leading marker untouched (single #)', () => {
+    expect(itemsToMarkdown([{ bbox: [0, 0, 0, 0], label: 'Title', text: 'Plain Title' }])).toBe('# Plain Title');
+  });
+
+  it('does not double-# a Title that is already pre-hashed (# Foo -> # Foo)', () => {
+    expect(itemsToMarkdown([{ bbox: [0, 0, 0, 0], label: 'Title', text: '# Foo' }])).toBe('# Foo');
+  });
+
+  it('collapses a multi-hash Title to a single leading # (### Foo -> # Foo)', () => {
+    expect(itemsToMarkdown([{ bbox: [0, 0, 0, 0], label: 'Title', text: '### Foo' }])).toBe('# Foo');
+  });
+
+  it('does not double-## a pre-hashed Section-header (## Sec -> ## Sec)', () => {
+    expect(itemsToMarkdown([{ bbox: [0, 0, 0, 0], label: 'Section-header', text: '## Sec' }])).toBe('## Sec');
+  });
+
+  it('strips a pre-hashed marker from the section_header underscore variant too', () => {
+    expect(itemsToMarkdown([{ bbox: [0, 0, 0, 0], label: 'section_header', text: '## S' }])).toBe('## S');
+  });
+
+  it('leaves a mid-text hash untouched (only a leading marker is stripped)', () => {
+    expect(itemsToMarkdown([{ bbox: [0, 0, 0, 0], label: 'Title', text: 'Foo # bar' }])).toBe('# Foo # bar');
+  });
+
+  it('keeps Formula text verbatim even when it starts with a hash (never stripped)', () => {
+    expect(itemsToMarkdown([{ bbox: [0, 0, 0, 0], label: 'Formula', text: '# not a heading' }])).toBe(
+      '$$\n# not a heading\n$$',
+    );
+  });
+
+  it('does not strip a leading hash from a plain Text block (only headings)', () => {
+    expect(itemsToMarkdown([{ bbox: [0, 0, 0, 0], label: 'Text', text: '# literal' }])).toBe('# literal');
+  });
 });
 
 describe('bboxToNormalized', () => {
