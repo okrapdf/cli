@@ -48,10 +48,30 @@ export interface PageInput extends VlmImage {
 
 export interface Parser {
   spec: ParserSpec;
-  parsePage(input: PageInput, ctx: ParserContext): Promise<PageParse>;
+  // PROPOSAL(spike): a parser implements EXACTLY ONE of these two entry points.
+  //
+  //  - parsePage: the per-rasterized-page path VLM parsers use (default: layout-vlm).
+  //  - parseDocument: the document-native path (requires:'http', e.g. docling-serve).
+  //    The whole PDF is handed over in one call; the engine PREFERS it and SKIPS
+  //    rasterization (rasterizing first would waste docling's native text layer).
+  //
+  // Both are optional so a document-native parser needn't carry a dead parsePage stub
+  // (see DESIGN.md: parser = prompts/settings/decode behind one interface). The change
+  // is purely additive — every existing parser already satisfies it — and the engine
+  // throws a clear programmer-error if a parser supplies NEITHER. A future revision may
+  // tighten this to a discriminated union keyed on `spec.requires`.
+  parsePage?(input: PageInput, ctx: ParserContext): Promise<PageParse>;
+  parseDocument?(pdf: Uint8Array, ctx: ParserContext): Promise<PageParse[]>;
 }
 
-/** Author a Parser with type inference (flue defineAgent / parser-sdk defineParser analog). */
-export function defineParser(def: Parser): Parser {
+/**
+ * Author a Parser with type inference (flue defineAgent / parser-sdk defineParser analog).
+ *
+ * PROPOSAL(spike): generic over the concrete literal so a parser keeps its precise shape
+ * (a VLM parser's `parsePage` stays non-optional at its definition/call sites; a
+ * document-native parser exposes `parseDocument`). Behavior is unchanged — it still just
+ * returns `def`.
+ */
+export function defineParser<T extends Parser>(def: T): T {
   return def;
 }

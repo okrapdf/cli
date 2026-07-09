@@ -23,6 +23,7 @@ import type { ProviderSpec } from '../providers/types.js';
 import { createClient } from '../providers/client.js';
 import { costUsdOrUndefined } from '../providers/pricing.js';
 import { PARSERS, getParser, DEFAULT_PARSER_ID } from '../parsers/registry.js';
+import type { Parser } from '../parsers/types.js';
 import { parseDocument } from '../core/engine.js';
 import type { DocumentParse, ParseRunMeta, TokenUsage } from '../core/blocks.js';
 
@@ -177,6 +178,13 @@ export async function runParse(
     );
   }
 
+  // PROPOSAL(spike): document-native HTTP parsers (requires:'http', e.g. docling-serve)
+  // take a whole-PDF path with NO model provider and NO VLM key — just a base URL. This
+  // is the wiring the seam needs; base-URL delivery is an OPEN QUESTION in PROPOSAL.md.
+  if (parser.spec.requires === 'http') {
+    return runParseHttp(parser, parserId, filePath, options, env, deps);
+  }
+
   // 3. provider (default: gemini)
   const providerId = options.provider ?? 'gemini';
   const provider = getProvider(providerId);
@@ -245,7 +253,19 @@ export async function runParse(
     throw augmentParseFailure(err, provider, providerId);
   }
 
-  // 7. write artifacts under <out>/ (default ./<pdf-basename>.okra/)
+  // 7. write artifacts (shared with the http-parser path).
+  return writeParseArtifacts(result, options, filePath);
+}
+
+/**
+ * Write doc.md / blocks.json / manifest.json under <out>/ (default ./<pdf-basename>.okra/)
+ * and build the envelope + manifest. Shared by the VLM path and the http-parser path.
+ */
+function writeParseArtifacts(
+  result: DocumentParse,
+  options: ParseCliOptions,
+  filePath: string,
+): RunParseResult {
   const base = basename(filePath).replace(/\.pdf$/i, '');
   const outDir = options.out ? resolve(options.out) : resolve(process.cwd(), `${base}.okra`);
   mkdirSync(outDir, { recursive: true });
@@ -266,6 +286,68 @@ export async function runParse(
   };
 
   return { envelope, manifest, result, outDir };
+}
+
+/**
+ * PROPOSAL(spike): the http-parser (document-native) path. A requires:'http' parser
+ * (docling-serve) needs neither a model provider nor a VLM key — only a base URL, which
+ * the engine hands it and which it uses to parse the whole PDF in one call (no
+ * rasterization). Arg-shape validation + artifact writing are shared with the VLM path.
+ *
+ * Base-URL delivery (OPEN QUESTION for approval): reuse the existing `--base-url` flag,
+ * falling back to the `DOCLING_SERVE_URL` env var. No new flag, no provider machinery.
+ */
+async function runParseHttp(
+  parser: Parser,
+  parserId: string,
+  filePath: string,
+  options: ParseCliOptions,
+  env: NodeJS.ProcessEnv,
+  deps: RunParseDeps,
+): Promise<RunParseResult> {
+  // validate arg shapes up front (INVALID_ARGS), same as the VLM path.
+  const pages = options.pages ? parsePageRange(options.pages) : undefined;
+  const concurrency = options.concurrency
+    ? parsePositiveInt(options.concurrency, '--concurrency')
+    : undefined;
+  const dpi = options.dpi ? parsePositiveInt(options.dpi, '--dpi') : undefined;
+
+  const httpBaseUrl = options.baseUrl ?? env.DOCLING_SERVE_URL;
+  if (!httpBaseUrl) {
+    throw new ParseCommandError(
+      `Parser '${parserId}' needs an HTTP base URL. Pass --base-url <url> ` +
+        `(e.g. --base-url http://localhost:5001) or set DOCLING_SERVE_URL.`,
+      PARSE_EXIT.INVALID_ARGS,
+    );
+  }
+
+  const pdf = new Uint8Array(readFileSync(filePath));
+  let result: DocumentParse;
+  try {
+    result = await parseDocument(pdf, {
+      parser,
+      httpBaseUrl,
+      pages,
+      concurrency,
+      dpi,
+      allowEmpty: options.allowEmpty,
+      signal: undefined,
+      onProgress: deps.onProgress,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = numericStatus(err);
+    if (status === 400 || status === 401 || status === 403) {
+      throw new ParseCommandError(
+        `${message}\nHTTP ${status} from the parser endpoint — check --base-url (${httpBaseUrl}) ` +
+          `and any auth/proxy in front of ${parserId}.`,
+        PARSE_EXIT.ERROR,
+      );
+    }
+    throw new ParseCommandError(message, PARSE_EXIT.ERROR);
+  }
+
+  return writeParseArtifacts(result, options, filePath);
 }
 
 function printSummary(envelope: ParseEnvelope): void {
@@ -298,7 +380,7 @@ export function createParseCommand(): Command {
     .option('--dpi <n>', 'Rasterization DPI (default: 175)')
     .option('--allow-empty', 'Do not fail when every page decodes 0 blocks (keep the empty result)')
     .option('--api-key <key>', 'Provider API key (overrides env / config)')
-    .option('--base-url <url>', 'Provider base URL (required for openai-compatible)')
+    .option('--base-url <url>', 'Provider base URL (openai-compatible), or the parser base URL for http parsers (e.g. docling-serve)')
     .option('-o, --output <format>', 'Output format (table, json)', getDefaultFormat())
     .action(async (pdf: string, options: ParseCliOptions) => {
       const useJson = options.output === 'json' || isJsonOutput();

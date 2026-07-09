@@ -108,7 +108,9 @@ async function parsePageWithRetry(
   let attempt = 0;
   for (;;) {
     try {
-      return await parser.parsePage(input, ctx);
+      // parsePage presence is guaranteed by parseDocument()'s entry-point guard before
+      // this per-page path runs (PROPOSAL(spike): parsePage is now optional on Parser).
+      return await parser.parsePage!(input, ctx);
     } catch (err) {
       attempt++; // count the try we just made
       if (!isRetryable(err) || attempt > retries) {
@@ -130,57 +132,51 @@ async function parsePageWithRetry(
   }
 }
 
-export async function parseDocument(
+/**
+ * PROPOSAL(spike): whole-document retry for document-native parsers. Mirrors
+ * parsePageWithRetry but wraps the single parseDocument call; the failure names the
+ * document (no page). Same retry currency (VlmHttpError 429/5xx via isRetryable).
+ */
+async function parseWholeDocumentWithRetry(
+  parser: Parser,
   pdf: Uint8Array,
-  opts: ParseDocumentOptions,
-): Promise<DocumentParse> {
-  const startedAt = Date.now();
-  const concurrency = Math.max(1, opts.concurrency ?? DEFAULT_CONCURRENCY);
-  const retries = opts.retries ?? DEFAULT_RETRIES;
-  const settings = { ...opts.parser.spec.defaults, ...(opts.settings ?? {}) };
-
-  const inputs = await rasterizePages(pdf, { pages: opts.pages, dpi: opts.dpi });
-  const total = inputs.length;
-
-  const ctx: ParserContext = {
-    vlm: opts.vlm,
-    model: opts.model,
-    providerId: opts.providerId,
-    httpBaseUrl: opts.httpBaseUrl,
-    settings,
-    signal: opts.signal,
-  };
-
-  // Bounded worker pool: at most `concurrency` runners, each pulling the next page
-  // index until exhausted. Results land by index → ascending order regardless of
-  // completion order. First failure stops new work and rejects the whole run.
-  const results: PageParse[] = new Array(total);
-  let done = 0;
-  let cursor = 0;
-  let firstError: unknown;
-
-  const runner = async (): Promise<void> => {
-    while (firstError === undefined) {
-      const idx = cursor++;
-      if (idx >= total) return;
-      const input = inputs[idx];
-      try {
-        results[idx] = await parsePageWithRetry(opts.parser, input, ctx, retries);
-        done++;
-        opts.onProgress?.(done, total);
-      } catch (err) {
-        // parsePageWithRetry already composed a page-naming message with the attempts
-        // actually made + the underlying status; keep the first failure verbatim.
-        if (firstError === undefined) firstError = err;
-        return;
+  ctx: ParserContext,
+  retries: number,
+): Promise<PageParse[]> {
+  let attempt = 0;
+  for (;;) {
+    try {
+      // presence guaranteed by parseDocument()'s entry-point dispatch below.
+      return await parser.parseDocument!(pdf, ctx);
+    } catch (err) {
+      attempt++;
+      if (!isRetryable(err) || attempt > retries) {
+        const detail = err instanceof Error ? err.message : String(err);
+        const status = err instanceof VlmHttpError ? err.status : undefined;
+        throw new PageParseError(
+          `Failed to parse document after ${attempt} ${attempt === 1 ? 'attempt' : 'attempts'}: ${detail}`,
+          0, // whole-document failure — no single page
+          attempt,
+          status,
+        );
       }
+      const ceiling = BACKOFF_BASE_MS * 2 ** (attempt - 1);
+      await sleep(ceiling + Math.random() * ceiling);
     }
-  };
+  }
+}
 
-  await Promise.all(Array.from({ length: Math.min(concurrency, total) }, () => runner()));
-  if (firstError !== undefined) throw firstError;
-
-  const pages = results;
+/**
+ * Assemble decoded PageParse[] into a DocumentParse. Shared by BOTH the per-page pool and
+ * the document-native path so the all-zero-blocks guard, usage summation, warnings, cost,
+ * and meta are identical regardless of parser kind (PROPOSAL(spike)).
+ */
+function assembleDocument(
+  pages: PageParse[],
+  opts: ParseDocumentOptions,
+  startedAt: number,
+): DocumentParse {
+  const total = pages.length;
   const blocks: LayoutBlock[] = pages.flatMap((p) => p.blocks);
   let usage = EMPTY_USAGE;
   for (const p of pages) usage = addUsage(usage, p.usage);
@@ -223,4 +219,75 @@ export async function parseDocument(
   };
 
   return { markdown, pages, blocks, usage, meta };
+}
+
+export async function parseDocument(
+  pdf: Uint8Array,
+  opts: ParseDocumentOptions,
+): Promise<DocumentParse> {
+  const startedAt = Date.now();
+  const retries = opts.retries ?? DEFAULT_RETRIES;
+  const settings = { ...opts.parser.spec.defaults, ...(opts.settings ?? {}) };
+
+  // PROPOSAL(spike): a parser must implement exactly one entry point.
+  if (!opts.parser.parseDocument && !opts.parser.parsePage) {
+    throw new Error(
+      `Parser '${opts.parser.spec.id}' implements neither parseDocument nor parsePage — one is required.`,
+    );
+  }
+
+  const ctx: ParserContext = {
+    vlm: opts.vlm,
+    model: opts.model,
+    providerId: opts.providerId,
+    httpBaseUrl: opts.httpBaseUrl,
+    settings,
+    signal: opts.signal,
+  };
+
+  // PROPOSAL(spike): DOCUMENT-NATIVE dispatch. When the parser implements parseDocument
+  // (docling-serve, requires:'http'), hand it the whole PDF in ONE call and SKIP
+  // rasterization + the per-page pool (rasterizing would waste docling's native text
+  // layer). Retries wrap the single call; assembly is shared with the per-page path.
+  if (opts.parser.parseDocument) {
+    const pages = await parseWholeDocumentWithRetry(opts.parser, pdf, ctx, retries);
+    opts.onProgress?.(pages.length, pages.length);
+    return assembleDocument(pages, opts, startedAt);
+  }
+
+  // Per-page VLM path (unchanged).
+  const concurrency = Math.max(1, opts.concurrency ?? DEFAULT_CONCURRENCY);
+  const inputs = await rasterizePages(pdf, { pages: opts.pages, dpi: opts.dpi });
+  const total = inputs.length;
+
+  // Bounded worker pool: at most `concurrency` runners, each pulling the next page
+  // index until exhausted. Results land by index → ascending order regardless of
+  // completion order. First failure stops new work and rejects the whole run.
+  const results: PageParse[] = new Array(total);
+  let done = 0;
+  let cursor = 0;
+  let firstError: unknown;
+
+  const runner = async (): Promise<void> => {
+    while (firstError === undefined) {
+      const idx = cursor++;
+      if (idx >= total) return;
+      const input = inputs[idx];
+      try {
+        results[idx] = await parsePageWithRetry(opts.parser, input, ctx, retries);
+        done++;
+        opts.onProgress?.(done, total);
+      } catch (err) {
+        // parsePageWithRetry already composed a page-naming message with the attempts
+        // actually made + the underlying status; keep the first failure verbatim.
+        if (firstError === undefined) firstError = err;
+        return;
+      }
+    }
+  };
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, total) }, () => runner()));
+  if (firstError !== undefined) throw firstError;
+
+  return assembleDocument(results, opts, startedAt);
 }

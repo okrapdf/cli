@@ -274,3 +274,61 @@ describe('createParseCommand — -o json stdout envelope', () => {
     expect(existsSync(join(outDir, 'doc.md'))).toBe(true);
   });
 });
+
+// PROPOSAL(spike): the document-native http-parser path (docling-serve). Distinct origin
+// from the VLM intercept above so the persisted 200s don't collide. NO rasterization runs
+// on this path (docling parses the whole PDF server-side), so it needs no mupdf.
+describe('runParse — docling-serve http parser (PROPOSAL spike)', () => {
+  const DOCLING_ORIGIN = 'https://fake-docling.test';
+  const MINI_DOC = {
+    body: { children: [{ $ref: '#/texts/0' }] },
+    texts: [
+      {
+        label: 'text',
+        text: 'docling parsed this',
+        prov: [{ page_no: 1, bbox: { l: 0, t: 100, r: 100, b: 0, coord_origin: 'BOTTOMLEFT' } }],
+      },
+    ],
+    pages: { '1': { size: { width: 100, height: 100 } } },
+  };
+  function interceptDocling(): void {
+    agent()
+      .get(DOCLING_ORIGIN)
+      .intercept({ path: '/v1/convert/source', method: 'POST' })
+      .reply(200, { status: 'success', document: { json_content: MINI_DOC } })
+      .persist();
+  }
+
+  it('parses via --base-url, writing the three artifacts with no provider key/model', async () => {
+    interceptDocling();
+    const { envelope, manifest, result } = await runParse(
+      FIXTURE,
+      { parser: 'docling-serve', baseUrl: DOCLING_ORIGIN, out: outDir },
+      noCreds,
+    );
+    expect(existsSync(join(outDir, 'doc.md'))).toBe(true);
+    expect(existsSync(join(outDir, 'blocks.json'))).toBe(true);
+    expect(manifest.meta.parserId).toBe('docling-serve');
+    expect(manifest.meta.providerId).toBeUndefined(); // no provider on the http path
+    expect(result.blocks[0]).toMatchObject({ label: 'Text', text: 'docling parsed this' });
+    expect(envelope.meta.pageCount).toBe(1);
+  });
+
+  it('falls back to DOCLING_SERVE_URL when --base-url is absent', async () => {
+    interceptDocling();
+    const { manifest } = await runParse(
+      FIXTURE,
+      { parser: 'docling-serve', out: outDir },
+      { env: { DOCLING_SERVE_URL: DOCLING_ORIGIN } as NodeJS.ProcessEnv, getProviderConfig: () => ({}) },
+    );
+    expect(manifest.meta.parserId).toBe('docling-serve');
+  });
+
+  it('errors with INVALID_ARGS (exit 2) when no --base-url and no DOCLING_SERVE_URL', async () => {
+    const err = await runParse(FIXTURE, { parser: 'docling-serve', out: outDir }, noCreds).catch(
+      (e: unknown) => e,
+    );
+    expect(err).toMatchObject({ exitCode: PARSE_EXIT.INVALID_ARGS });
+    expect((err as Error).message).toMatch(/base URL/i);
+  });
+});
