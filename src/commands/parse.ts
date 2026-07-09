@@ -50,6 +50,7 @@ export interface ParseCliOptions {
   dpi?: string;
   apiKey?: string;
   baseUrl?: string;
+  allowEmpty?: boolean;
   output?: string;
 }
 
@@ -232,6 +233,7 @@ export async function runParse(
       pages,
       concurrency,
       dpi,
+      allowEmpty: options.allowEmpty,
       // pass the pricing hook from providers/ (the engine never imports it).
       pricing: costUsdOrUndefined,
       signal: undefined,
@@ -294,6 +296,7 @@ export function createParseCommand(): Command {
     .option('--pages <range>', 'Page range, e.g. 1-5 (default: all pages)')
     .option('--concurrency <n>', 'Max pages parsed in parallel (default: 4)')
     .option('--dpi <n>', 'Rasterization DPI (default: 175)')
+    .option('--allow-empty', 'Do not fail when every page decodes 0 blocks (keep the empty result)')
     .option('--api-key <key>', 'Provider API key (overrides env / config)')
     .option('--base-url <url>', 'Provider base URL (required for openai-compatible)')
     .option('-o, --output <format>', 'Output format (table, json)', getDefaultFormat())

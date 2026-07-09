@@ -280,6 +280,65 @@ describe('parseDocument — assembly', () => {
   });
 });
 
+describe('parseDocument — all-zero-blocks guard (#13)', () => {
+  const zeroUsage: TokenUsage = { inputTokens: 5, outputTokens: 12, thinkingTokens: 0 };
+  const zeroParser = (): Parser =>
+    fakeParser(async (input) => ({ page: input.page, markdown: '', blocks: [], usage: zeroUsage }));
+
+  it('rejects when EVERY page decodes 0 blocks — names the model, output tokens, and --allow-empty', async () => {
+    mockRaster.mockResolvedValue(pageInputs(3));
+    const err = (await parseDocument(PDF, {
+      parser: zeroParser(),
+      vlm: dummyVlm,
+      model: 'nemo-vl',
+    }).catch((e: unknown) => e)) as Error;
+    expect(err).toBeInstanceOf(Error);
+    expect(err.message).toContain('nemo-vl');
+    expect(err.message).toMatch(/0 (layout )?blocks/i);
+    expect(err.message).toContain('--allow-empty');
+    // proof the model DID answer: the summed output-token count (3 × 12 = 36) is surfaced.
+    expect(err.message).toContain('36');
+  });
+
+  it('does NOT reject when only some pages are zero (partial → warning only)', async () => {
+    mockRaster.mockResolvedValue(pageInputs(3));
+    const parser = fakeParser(async (input) => ({
+      page: input.page,
+      markdown: input.page === 2 ? '' : 'x',
+      blocks: input.page === 2 ? [] : [blk(input.page)],
+      usage: U,
+    }));
+    const res = await parseDocument(PDF, { parser, vlm: dummyVlm, model: 'm' });
+    expect(res.meta.warnings).toContain('page 2: 0 blocks decoded');
+    expect(res.pages).toHaveLength(3);
+  });
+
+  it('allowEmpty=true returns the empty-but-successful result (old behavior)', async () => {
+    mockRaster.mockResolvedValue(pageInputs(2));
+    const res = await parseDocument(PDF, {
+      parser: zeroParser(),
+      vlm: dummyVlm,
+      model: 'nemo-vl',
+      allowEmpty: true,
+    });
+    expect(res.pages).toHaveLength(2);
+    expect(res.blocks).toHaveLength(0);
+    expect(res.meta.warnings).toHaveLength(2); // both pages warned, but no throw
+  });
+
+  it('does not trip the guard on a normal run (blocks present)', async () => {
+    mockRaster.mockResolvedValue(pageInputs(2));
+    const parser = fakeParser(async (input) => ({
+      page: input.page,
+      markdown: 'x',
+      blocks: [blk(input.page)],
+      usage: U,
+    }));
+    const res = await parseDocument(PDF, { parser, vlm: dummyVlm, model: 'm' });
+    expect(res.blocks).toHaveLength(2);
+  });
+});
+
 describe('parseDocument — wiring', () => {
   it('forwards pages + dpi to rasterize and merges settings over parser defaults', async () => {
     mockRaster.mockResolvedValue(pageInputs(2));

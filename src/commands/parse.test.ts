@@ -194,6 +194,49 @@ describe('runParse — failure modes + exit codes', () => {
     expect(err.message).toContain('OPENAI_API_KEY'); // env-var hint
     expect(err.message).toContain('okra auth login openai-compatible'); // command hint
   });
+
+  // #13 — a model whose output decodes 0 blocks on every page fails (exit 1) instead of
+  // writing an empty-but-"successful" result; --allow-empty opts back into the empty result.
+  it('rejects an all-zero-block parse (exit 1), naming the model + --allow-empty (#13)', async () => {
+    const ORIGIN_ZERO = 'https://fake-vlm-zero.test';
+    agent()
+      .get(ORIGIN_ZERO)
+      .intercept({ path: '/v1/chat/completions', method: 'POST' })
+      .reply(200, {
+        choices: [{ message: { content: 'sorry, no layout tags in this reply' } }],
+        usage: { prompt_tokens: 10, completion_tokens: 25 },
+      })
+      .persist();
+    const err = (await runParse(
+      FIXTURE,
+      { ...okOpts(), model: 'nemo-vl', baseUrl: `${ORIGIN_ZERO}/v1` },
+      noCreds,
+    ).catch((e) => e)) as { exitCode?: number; message: string };
+    expect(err.exitCode).toBe(PARSE_EXIT.ERROR);
+    expect(err.message).toContain('nemo-vl');
+    expect(err.message).toMatch(/0 (layout )?blocks/i);
+    expect(err.message).toContain('--allow-empty');
+  });
+
+  it('--allow-empty keeps an all-zero-block result (no throw) and writes the artifacts (#13)', async () => {
+    const ORIGIN_ZERO = 'https://fake-vlm-zero2.test';
+    agent()
+      .get(ORIGIN_ZERO)
+      .intercept({ path: '/v1/chat/completions', method: 'POST' })
+      .reply(200, {
+        choices: [{ message: { content: 'no layout' } }],
+        usage: { prompt_tokens: 10, completion_tokens: 25 },
+      })
+      .persist();
+    const { envelope } = await runParse(
+      FIXTURE,
+      { ...okOpts(), model: 'nemo-vl', baseUrl: `${ORIGIN_ZERO}/v1`, allowEmpty: true },
+      noCreds,
+    );
+    expect(envelope.meta.pageCount).toBe(2);
+    expect(envelope.pages.every((p) => p.blockCount === 0)).toBe(true);
+    expect(existsSync(join(outDir, 'doc.md'))).toBe(true);
+  });
 });
 
 describe('createParseCommand — -o json stdout envelope', () => {

@@ -45,6 +45,15 @@ export interface ParseDocumentOptions {
    * Added per worker CONTRACT-NOTE (architect pre-approved exactly this field) — DESIGN.md #4.
    */
   pricing?: (model: string, usage: TokenUsage) => number | undefined;
+  /**
+   * When EVERY page decodes 0 blocks, parseDocument rejects (the model almost certainly
+   * doesn't fit the layout-block prompt — transport worked, output didn't) instead of
+   * returning an empty-but-"successful" result. Set true to keep the empty result
+   * (exposed as `okra parse --allow-empty`). Default false. (#13)
+   *
+   * Added per worker CONTRACT-NOTE (architect pre-approved exactly this field) — issue #13.
+   */
+  allowEmpty?: boolean;
   signal?: AbortSignal;
   onProgress?: (done: number, total: number) => void;
 }
@@ -180,6 +189,22 @@ export async function parseDocument(
   const warnings: string[] = [];
   for (const p of pages) {
     if (p.blocks.length === 0) warnings.push(`page ${p.page}: 0 blocks decoded`);
+  }
+
+  // #13 — a run where EVERY page decoded 0 blocks is almost always a wrong/unsupported
+  // model: the transport worked (the model answered) but its output didn't match the
+  // layout-block format, so nothing decoded. Fail loudly instead of returning an
+  // empty-but-"successful" result — unless the caller opted into empties (--allow-empty).
+  // Partial zero-block pages stay warnings (above). `blocks` is the flat all-page list,
+  // so blocks.length === 0 ⟺ every page decoded zero.
+  if (total > 0 && blocks.length === 0 && !opts.allowEmpty) {
+    const modelName = opts.model ?? '(default model)';
+    throw new Error(
+      `Parsed ${total} page${total === 1 ? '' : 's'} with model "${modelName}" but decoded 0 layout blocks total. ` +
+        `The model responded (${usage.outputTokens} output tokens) — its output just didn't contain the expected ` +
+        `layout blocks, so nothing decoded. Try a different --model or --provider (some vision models don't follow ` +
+        `the layout-block prompt), or re-run with --allow-empty to keep the empty result.`,
+    );
   }
 
   // Cost via the injected hook only — the engine never imports providers/pricing.

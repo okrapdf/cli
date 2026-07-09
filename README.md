@@ -93,7 +93,7 @@ catalog entry + auth resolution + transport dialect. Key resolution precedence i
 | Provider | Env var(s) | Default model | Key |
 |---|---|---|---|
 | `gemini` | `GEMINI_API_KEY` / `GOOGLE_API_KEY` | `gemini-3-flash-preview` | Free key at https://aistudio.google.com/apikey |
-| `nvidia` | `NVIDIA_API_KEY` | `nvidia/llama-3.1-nemotron-nano-vl-8b-v1` | Free dev tier at https://build.nvidia.com |
+| `nvidia` | `NVIDIA_API_KEY` | `meta/llama-3.2-90b-vision-instruct` | Free dev tier at https://build.nvidia.com |
 | `openrouter` | `OPENROUTER_API_KEY` | `google/gemini-3-flash-preview` | https://openrouter.ai/keys |
 | `openai-compatible` | `OPENAI_API_KEY` + `OPENAI_BASE_URL` | *(pass `--model`)* | Any vLLM / Ollama / OpenAI-shaped endpoint |
 
