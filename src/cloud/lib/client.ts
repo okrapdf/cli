@@ -84,7 +84,7 @@ export function createClient(): Got {
   if (!apiKey) {
     throw new OkraApiError(
       'auth_required',
-      'Not authenticated. Run `okra auth login` first.',
+      'Not authenticated. Run `okra cloud login` first.',
       401
     );
   }
