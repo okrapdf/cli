@@ -245,7 +245,7 @@ export async function runParse(
     throw augmentParseFailure(err, provider, providerId);
   }
 
-  // 6. write artifacts under <out>/ (default ./<pdf-basename>.okra/)
+  // 7. write artifacts under <out>/ (default ./<pdf-basename>.okra/)
   const base = basename(filePath).replace(/\.pdf$/i, '');
   const outDir = options.out ? resolve(options.out) : resolve(process.cwd(), `${base}.okra`);
   mkdirSync(outDir, { recursive: true });
