@@ -168,6 +168,32 @@ describe('runParse — failure modes + exit codes', () => {
       message: expect.stringMatching(/--dpi/),
     });
   });
+
+  // #15 — a provider 400 (bad key) surfaces as: attempts actually made (not "retries"),
+  // the provider's own body snippet, and an actionable auth hint. Exit 1.
+  // Own origin so the happy-path 200 `.persist()` intercept (same file) can't shadow it.
+  it('surfaces a provider 400 with attempts + body snippet + auth hint (exit 1)', async () => {
+    const ORIGIN_400 = 'https://fake-vlm-badkey.test';
+    agent()
+      .get(ORIGIN_400)
+      .intercept({ path: '/v1/chat/completions', method: 'POST' })
+      .reply(400, 'Invalid API key provided')
+      .persist();
+    const err = (await runParse(
+      FIXTURE,
+      { ...okOpts(), baseUrl: `${ORIGIN_400}/v1` },
+      noCreds,
+    ).catch((e) => e)) as {
+      exitCode?: number;
+      message: string;
+    };
+    expect(err.exitCode).toBe(PARSE_EXIT.ERROR);
+    expect(err.message).toContain('after 1 attempt'); // attempts actually made, not the setting
+    expect(err.message).not.toMatch(/after \d+ retries/); // the old lie is gone
+    expect(err.message).toContain('Invalid API key provided'); // provider body snippet
+    expect(err.message).toContain('OPENAI_API_KEY'); // env-var hint
+    expect(err.message).toContain('okra auth login openai-compatible'); // command hint
+  });
 });
 
 describe('createParseCommand — -o json stdout envelope', () => {

@@ -148,6 +148,44 @@ describe('parseDocument — retry policy', () => {
     ).rejects.toThrow(/page 1/);
     expect(attempts).toBe(1);
   });
+
+  // #15 — the failure message must state the attempts ACTUALLY made, not the retries setting.
+  it('reports "after 1 attempt" for a non-retryable 400 (retries setting is 3, but only 1 try)', async () => {
+    mockRaster.mockResolvedValue(pageInputs(1));
+    const parser = fakeParser(async () => {
+      throw new VlmHttpError('bad request', 400);
+    });
+    const err = (await parseDocument(PDF, { parser, vlm: dummyVlm, model: 'm', retries: 3 }).catch(
+      (e: unknown) => e,
+    )) as Error;
+    expect(err.message).toMatch(/after 1 attempt\b/);
+    expect(err.message).not.toMatch(/retries/); // the old "after N retries" lie is gone
+  });
+
+  it('reports "after 3 attempts" after a 500 exhausts 2 retries (1 initial + 2)', async () => {
+    mockRaster.mockResolvedValue(pageInputs(1));
+    const parser = fakeParser(async () => {
+      throw new VlmHttpError('upstream boom', 500);
+    });
+    vi.useFakeTimers();
+    const p = parseDocument(PDF, { parser, vlm: dummyVlm, model: 'm', retries: 2 });
+    const settled = p.catch((e: unknown) => e);
+    await vi.runAllTimersAsync();
+    const err = (await settled) as Error;
+    expect(err.message).toMatch(/after 3 attempts\b/);
+  });
+
+  it('preserves the underlying transport error message (incl. body snippet) in the page failure', async () => {
+    mockRaster.mockResolvedValue(pageInputs(1));
+    const parser = fakeParser(async () => {
+      throw new VlmHttpError('nvidia chat/completions failed with HTTP 400: API key not valid', 400);
+    });
+    const err = (await parseDocument(PDF, { parser, vlm: dummyVlm, model: 'm', retries: 2 }).catch(
+      (e: unknown) => e,
+    )) as Error;
+    expect(err.message).toContain('API key not valid');
+    expect(err.message).toMatch(/after 1 attempt/);
+  });
 });
 
 describe('parseDocument — assembly', () => {

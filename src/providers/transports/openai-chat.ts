@@ -7,9 +7,9 @@
  */
 
 import type { VlmClient, VlmRequest, VlmResponse } from '../../core/vlm.js';
-import { VlmHttpError } from '../../core/vlm.js';
 import type { TokenUsage } from '../../core/blocks.js';
 import type { ResolvedProvider } from '../types.js';
+import { vlmHttpError } from './http-error.js';
 
 /** Fallbacks used only when the parser omits them (parsers pass explicit values). */
 const DEFAULT_MAX_TOKENS = 4096;
@@ -65,7 +65,7 @@ export function createOpenAiChatClient(resolved: ResolvedProvider): VlmClient {
 
       if (!res.ok) {
         const errBody = await res.text().catch(() => '');
-        throw new VlmHttpError(
+        throw vlmHttpError(
           `${resolved.spec.id} chat/completions failed with HTTP ${res.status}`,
           res.status,
           errBody,

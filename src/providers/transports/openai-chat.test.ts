@@ -157,4 +157,18 @@ describe('createOpenAiChatClient', () => {
     expect(err.status).toBe(500);
     expect(err.body).toContain('upstream boom');
   });
+
+  it('folds a trimmed body snippet into the VlmHttpError message on 400 (#15)', async () => {
+    agent()
+      .get(ORIGIN)
+      .intercept({ path: PATH, method: 'POST' })
+      .reply(400, 'API key not valid. Please pass a valid API key.');
+    const err = await createOpenAiChatClient(resolved)
+      .complete({ model: 'm', system: 's', user: 'u', images: [] })
+      .catch((e) => e);
+    expect(err).toBeInstanceOf(VlmHttpError);
+    expect(err.status).toBe(400);
+    expect(err.message).toContain('API key not valid');
+    expect(err.body).toContain('API key not valid');
+  });
 });

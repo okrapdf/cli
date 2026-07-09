@@ -6,9 +6,9 @@
  */
 
 import type { VlmClient, VlmRequest, VlmResponse } from '../../core/vlm.js';
-import { VlmHttpError } from '../../core/vlm.js';
 import type { TokenUsage } from '../../core/blocks.js';
 import type { ResolvedProvider } from '../types.js';
+import { vlmHttpError } from './http-error.js';
 
 const DEFAULT_MAX_TOKENS = 4096;
 const DEFAULT_TEMPERATURE = 0;
@@ -60,7 +60,7 @@ export function createGeminiClient(resolved: ResolvedProvider): VlmClient {
 
       if (!res.ok) {
         const errBody = await res.text().catch(() => '');
-        throw new VlmHttpError(
+        throw vlmHttpError(
           `${resolved.spec.id} generateContent failed with HTTP ${res.status}`,
           res.status,
           errBody,

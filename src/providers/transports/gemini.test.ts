@@ -147,4 +147,17 @@ describe('createGeminiClient', () => {
     expect(err.status).toBe(503);
     expect(err.body).toContain('overloaded');
   });
+
+  it('folds a trimmed body snippet into the VlmHttpError message on 400 (#15)', async () => {
+    agent()
+      .get(ORIGIN)
+      .intercept({ path: pathFor('gemini-3-flash'), method: 'POST' })
+      .reply(400, '{ "error": { "message": "API key not valid. Please pass a valid API key." } }');
+    const err = await createGeminiClient(resolved)
+      .complete({ model: 'gemini-3-flash', system: 's', user: 'u', images: [] })
+      .catch((e) => e);
+    expect(err).toBeInstanceOf(VlmHttpError);
+    expect(err.status).toBe(400);
+    expect(err.message).toContain('API key not valid');
+  });
 });

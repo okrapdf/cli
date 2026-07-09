@@ -19,6 +19,7 @@ import ora from 'ora';
 import { formatOutput, error, info } from '../lib/output.js';
 import { getDefaultFormat, isJsonOutput, getProviderConfig } from '../lib/config.js';
 import { PROVIDERS, getProvider, resolveProvider } from '../providers/registry.js';
+import type { ProviderSpec } from '../providers/types.js';
 import { createClient } from '../providers/client.js';
 import { costUsdOrUndefined } from '../providers/pricing.js';
 import { PARSERS, getParser, DEFAULT_PARSER_ID } from '../parsers/registry.js';
@@ -114,6 +115,39 @@ function parsePositiveInt(raw: string, flag: string): number {
   return n;
 }
 
+/** Numeric HTTP status carried by a transport/page error, if any. */
+function numericStatus(err: unknown): number | undefined {
+  if (err && typeof err === 'object' && 'status' in err) {
+    const s = (err as { status?: unknown }).status;
+    if (typeof s === 'number') return s;
+  }
+  return undefined;
+}
+
+/**
+ * Turn a parseDocument failure into a ParseCommandError (#15). For auth-shaped HTTP
+ * failures (400/401/403) append an actionable hint naming the provider's env var and
+ * `okra auth login <provider>`. BYOK-only copy — never mentions an okra account.
+ */
+function augmentParseFailure(
+  err: unknown,
+  provider: ProviderSpec,
+  providerId: string,
+): ParseCommandError {
+  const message = err instanceof Error ? err.message : String(err);
+  const status = numericStatus(err);
+  if (status === 400 || status === 401 || status === 403) {
+    const envVar = provider.envKeys[0];
+    const checkKey = envVar ? `check ${envVar}` : 'check your provider credentials';
+    return new ParseCommandError(
+      `${message}\nAuthentication failed (HTTP ${status}) — ${checkKey}, or set a valid key with ` +
+        `\`okra auth login ${providerId}\`.`,
+      PARSE_EXIT.ERROR,
+    );
+  }
+  return new ParseCommandError(message, PARSE_EXIT.ERROR);
+}
+
 /**
  * Run a parse end-to-end and write the three artifacts. Returns the envelope +
  * manifest. Throws `ParseCommandError` (never exits) so it is fully testable.
@@ -188,19 +222,26 @@ export async function runParse(
   const client = createClient(resolved);
   const pdf = new Uint8Array(readFileSync(filePath));
 
-  const result = await parseDocument(pdf, {
-    parser,
-    vlm: client,
-    model,
-    providerId,
-    pages,
-    concurrency,
-    dpi,
-    // pass the pricing hook from providers/ (the engine never imports it).
-    pricing: costUsdOrUndefined,
-    signal: undefined,
-    onProgress: deps.onProgress,
-  });
+  let result: DocumentParse;
+  try {
+    result = await parseDocument(pdf, {
+      parser,
+      vlm: client,
+      model,
+      providerId,
+      pages,
+      concurrency,
+      dpi,
+      // pass the pricing hook from providers/ (the engine never imports it).
+      pricing: costUsdOrUndefined,
+      signal: undefined,
+      onProgress: deps.onProgress,
+    });
+  } catch (err) {
+    // Parse/transport failures (bad key, upstream error, all-zero-block guard) surface as
+    // user-facing ParseCommandErrors; auth-shaped ones get an actionable hint appended.
+    throw augmentParseFailure(err, provider, providerId);
+  }
 
   // 6. write artifacts under <out>/ (default ./<pdf-basename>.okra/)
   const base = basename(filePath).replace(/\.pdf$/i, '');
